@@ -1,6 +1,23 @@
-# LLM Autocorrect
+<p align="center">
+  <img src="images/icon.png" width="128" alt="LLM Autocorrect icon">
+</p>
 
-LLM-powered autocorrect for code in VS Code and Cursor.
+<h1 align="center">LLM Autocorrect</h1>
+
+<p align="center">
+  <b><code>pritn</code> → <code>print</code></b><br>
+  LLM-powered autocorrect for code in <b>VS Code</b> and <b>Cursor</b>
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-b68235?style=flat-square" alt="VS Code Marketplace"></a>
+  <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-Cursor-1a1917?style=flat-square" alt="Open VSX"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20NC-8a6228?style=flat-square" alt="License"></a>
+</p>
+
+---
+
+The extension itself is the same in both editors — only the **language server (LSP)** setup differs.
 
 - **Line autocorrect** — press **Enter** and the line you just left may be fixed (typos, syntax). You'll see a brief highlight when it changes.
 - **Paste-translate** — paste code that looks like another language and get an offer to convert it. Nothing is replaced without your OK.
@@ -9,10 +26,12 @@ You bring your own API key (Groq is free and works well). Keys are stored in the
 
 ## Quick start
 
-1. **Install** the extension from the Marketplace, or install a `.vsix` via **Extensions → ⋯ → Install from VSIX**.
+1. **Install** the extension:
+   - **VS Code** — [Visual Studio Marketplace](https://marketplace.visualstudio.com) or a `.vsix`
+   - **Cursor** — [Open VSX](https://open-vsx.org), or **Extensions → ⋯ → Install from VSIX** (VS Code Marketplace alone does not list extensions in Cursor search)
 2. **Set your API key** — Command Palette → **`Autocorrect: Set API Key`** → choose provider → paste key.
-3. **Open a code file** — Python is enabled by default (`.py`).
-4. **Try it** — type `pritn("hello"` on one line, press **Enter** on the next line.
+3. **Set up Python LSP** for your editor — see [Language server setup](#language-server-setup-vs-code-vs-cursor) below.
+4. **Open a `.py` file** and try: type `pritn("hello"` on one line, press **Enter** on the next line.
 
 The status bar (bottom right) shows on/off and a spinner during requests. Click it to toggle.
 
@@ -98,43 +117,80 @@ Example — Python and TypeScript:
 
 You also need a language server that reports diagnostics in **Problems** if you use `autocorrect.line.requireDiagnostic`.
 
-## Cursor setup (Python)
+## Language server setup (VS Code vs Cursor)
 
-If line autocorrect on Enter does nothing, check Python language support.
+LLM Autocorrect does **not** ship a language server. It reads squiggles from whatever LSP your editor already runs. Setup is the main difference between VS Code and Cursor.
 
-1. **Uninstall** if present: **Cursor Pyright**, **Pylance** (`ms-python.vscode-pylance`)
-2. **Install** **Python** by **Anysphere** (`anysphere.python`) — Extensions → `publisher:"Anysphere"`
-3. Command Palette → **`Python: Select Interpreter`**
-4. Recommended user settings:
+**Shared extension settings** (both editors):
 
 ```json
 {
-  "autocorrect.line.requireDiagnostic": false,
-  "python.languageServer": "Default",
-  "cursorpyright.analysis.typeCheckingMode": "all"
+  "autocorrect.languages": ["python"],
+  "autocorrect.line.requireDiagnostic": true
 }
 ```
 
-| Setting | Why |
+Set `requireDiagnostic` to `false` if you want fixes on Enter without waiting for squiggles (uses more API calls).
+
+---
+
+### VS Code (Python)
+
+| Step | What to do |
 | --- | --- |
-| `requireDiagnostic: false` | Fixes on Enter even when squiggles are slow or missing |
-| `python.languageServer: "Default"` | Uses Anysphere's Python language server |
-| `typeCheckingMode: "all"` | More diagnostics in **Problems** (if you turn the diagnostic gate back on) |
+| Extensions | Install **Python** (`ms-python.python`) + **Pylance** (`ms-python.vscode-pylance`) |
+| Interpreter | Command Palette → **`Python: Select Interpreter`** |
+| Language server | **Pylance** (default when both extensions are installed) |
 
-To require a squiggle before each fix, set `autocorrect.line.requireDiagnostic` to `true` and confirm **View → Problems** shows errors for broken code.
-
-## VS Code setup (Python)
-
-1. Install **Python** + **Pylance**
-2. **`Python: Select Interpreter`**
-3. Optional:
+**Recommended `settings.json`:**
 
 ```json
 {
   "python.languageServer": "Pylance",
-  "python.analysis.typeCheckingMode": "basic"
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "autocorrect.line.requireDiagnostic": true
 }
 ```
+
+**Verify:** type `pritn("x")` in a `.py` file → **View → Problems** should list errors. If empty, run **`Python: Restart Language Server`**.
+
+---
+
+### Cursor (Python)
+
+Microsoft **Pylance does not work** in Cursor. Use **Anysphere Python** instead.
+
+| Step | What to do |
+| --- | --- |
+| Uninstall | **Cursor Pyright** (`anysphere.cursorpyright`), **Pylance** (`ms-python.vscode-pylance`) if present |
+| Extensions | Install **Python** by **Anysphere** (`anysphere.python`) — search `publisher:"Anysphere"` or open `cursor:extension/anysphere.python` |
+| Interpreter | Command Palette → **`Python: Select Interpreter`** |
+| Language server | **`Default`** (Anysphere's bundled server — not Pylance, not standalone Cursor Pyright) |
+
+**Recommended `settings.json` (verified on Cursor):**
+
+```json
+{
+  "python.languageServer": "Default",
+  "cursorpyright.analysis.typeCheckingMode": "all",
+  "autocorrect.line.requireDiagnostic": false
+}
+```
+
+| Setting | VS Code | Cursor |
+| --- | --- | --- |
+| `python.languageServer` | `"Pylance"` | `"Default"` |
+| Analysis settings | `python.analysis.*` | `cursorpyright.analysis.*` |
+| `requireDiagnostic` | `true` works well with Pylance | `false` recommended until squiggles are reliable; set `true` once **Problems** shows errors |
+
+**Verify:** type `pritn("x")` → check **View → Problems**. Run **`Python: Restart Language Server`** if needed.
+
+---
+
+### Other languages (both editors)
+
+Add the language ID to `autocorrect.languages` and install that language's extension + LSP (e.g. **rust-analyzer** for Rust, **gopls** for Go). Same extension code in VS Code and Cursor — only the language-server extension differs per ecosystem. Non-Python languages are not fully tested yet; see [Upcoming features](#upcoming-features).
 
 ## How it behaves
 
@@ -160,7 +216,7 @@ To require a squiggle before each fix, set `autocorrect.line.requireDiagnostic` 
 | Problem | Try |
 | --- | --- |
 | Nothing on Enter | Open a `.py` file; confirm Python is in `autocorrect.languages` |
-| `no LSP squiggle` in logs | Set `autocorrect.line.requireDiagnostic` to `false`, or fix Python/LSP setup above |
+| `no LSP squiggle` in logs | **VS Code:** confirm Pylance + interpreter. **Cursor:** use Anysphere Python + settings above, or set `requireDiagnostic` to `false` |
 | Manual works, Enter doesn't | Use **Correct Selected Line**, or disable the diagnostic gate |
 | `413` / token limit (Groq) | Selection too large; use single-line mode or a shorter selection |
 | No logs at all | Test in a **code file**, not the Output panel |
@@ -218,7 +274,7 @@ Then in the editor: **Extensions → ⋯ → Install from VSIX** → select `llm
 
 Reload the window, then run **`Autocorrect: Set API Key`**.
 
-To publish to the Marketplace (after creating a [publisher](https://marketplace.visualstudio.com/manage)):
+To publish for **VS Code** (after creating a [publisher](https://marketplace.visualstudio.com/manage)):
 
 ```bash
 vsce login <publisher-id>
@@ -226,3 +282,12 @@ vsce publish
 ```
 
 Marketplace publishing uses an **Azure DevOps Personal Access Token**, not your GitHub token.
+
+For **Cursor** search/install, also publish to [Open VSX](https://open-vsx.org):
+
+```bash
+npm install -g ovsx
+ovsx publish llm-autocorrect-0.0.1.vsix -p <open-vsx-pat>
+```
+
+Or attach the `.vsix` to GitHub Releases — users can install it in either editor via **Install from VSIX**.
