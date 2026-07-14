@@ -28,7 +28,8 @@ Cases marked NO-AUTO need requireDiagnostic: false OR a visible squiggle before 
 # CASE 1: typo in builtin — should fix print
 # Edit line below, press Enter on next line. Expect: pritn → print
 # =============================================================================
-pritn("hello")
+pritnf("hello")
+
 
 # =============================================================================
 # CASE 2: undefined name — Pylance usually squiggles this
@@ -46,6 +47,8 @@ print("hi")f;
 # CASE 4: missing closing paren
 # =============================================================================
 print("unclosed"
+
+print("hi")
 
 # =============================================================================
 # CASE 5: should SKIP — blank line (no API call)

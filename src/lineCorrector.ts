@@ -91,7 +91,7 @@ export class LineCorrector implements vscode.Disposable {
       this.output.appendLine(`[line]   squiggles in file: ${inFile.join(" | ")}`);
     } else {
       this.output.appendLine(
-        "[line]   squiggles in file: (none) — is Pylance/Python extension enabled?"
+        "[line]   squiggles in file: (none) — install Anysphere Python, select an interpreter, reload window"
       );
     }
     this.output.appendLine(
@@ -273,7 +273,7 @@ export class LineCorrector implements vscode.Disposable {
     if (!force && cfg().requireDiagnostic) {
       const waitMs = cfg().diagnosticWaitMs;
       this.output.appendLine(
-        `[line] diagnostic gate: waiting up to ${waitMs}ms for a Pylance/LSP squiggle on line ${line + 1} (local only, no API call)`
+        `[line] diagnostic gate: waiting up to ${waitMs}ms for a language-server squiggle on line ${line + 1} (local only, no API call)`
       );
       const { found, elapsed } = await this.waitForDiagnostic(doc.uri, line, waitMs);
       this.logDiagnosticGate(doc.uri, line, found, elapsed, false);
