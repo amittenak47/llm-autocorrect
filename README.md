@@ -1,115 +1,88 @@
 # LLM Autocorrect
 
-A VS Code / Cursor extension with two modes built on one LLM pipeline:
+LLM-powered autocorrect for code in VS Code and Cursor.
 
-1. **Line autocorrect** — when you press Enter, the line you just left is checked for
-   typos/syntax errors and silently fixed (with a brief highlight so you notice).
-2. **Paste-translate** — pasting code that looks like a different language (e.g. C++
-   into a `.py` file) pops a notification offering to convert the whole block. Nothing
-   is ever replaced without confirmation.
+- **Line autocorrect** — press **Enter** and the line you just left may be fixed (typos, syntax). You'll see a brief highlight when it changes.
+- **Paste-translate** — paste code that looks like another language and get an offer to convert it. Nothing is replaced without your OK.
 
-## Setup
+You bring your own API key (Groq is free and works well). Keys are stored in the editor's secret storage, not in your settings files.
 
-```
-npm install
-npm run compile
-```
+## Quick start
 
-Press **F5** in VS Code or Cursor to launch an Extension Development Host with the extension loaded.
+1. **Install** the extension from the Marketplace, or install a `.vsix` via **Extensions → ⋯ → Install from VSIX**.
+2. **Set your API key** — Command Palette → **`Autocorrect: Set API Key`** → choose provider → paste key.
+3. **Open a code file** — Python is enabled by default (`.py`).
+4. **Try it** — type `pritn("hello"` on one line, press **Enter** on the next line.
 
-Then in the **host window** (not the project window):
+The status bar (bottom right) shows on/off and a spinner during requests. Click it to toggle.
 
-1. Run **`Autocorrect: Set API Key`** from the command palette and paste your key
-   (stored in secret storage, never in settings files).
-2. Pick a provider in settings (`autocorrect.provider`): `groq` (default, fastest),
-   `gemini`, `anthropic`, or `openai-compatible` (set `autocorrect.baseUrl`, works
-   with Ollama/LM Studio/vLLM).
-3. Open a Python file and type something broken, e.g. `pritn("hello"` — press Enter.
-
-The status bar item (right side) shows on/off state and a spinner during requests;
-click it to toggle. The **LLM Autocorrect** output channel logs every correction.
+Logs: **View → Output** → **LLM Autocorrect**.
 
 ## Groq setup (recommended)
 
-Groq is the default provider: free tier, no credit card, fast inference.
-
-### 1. Get an API key
+Groq is the default provider: free tier, no credit card, fast.
 
 1. Sign up at [console.groq.com](https://console.groq.com)
-2. Open **API Keys** → **Create API Key**
-3. Copy the key immediately (shown once; starts with `gsk_`)
+2. **API Keys** → **Create API Key** → copy it (starts with `gsk_`, shown once)
+3. Command Palette → **`Autocorrect: Set API Key`** → **`groq`** → paste key
 
-Free-tier limits are rate-based (~30 requests/min, token caps per model). Enough for development and light use.
+Default model (when `autocorrect.model` is empty): **`llama-3.1-8b-instant`**.
 
-### 2. Store the key in the extension
+Free tier is rate-limited (~30 requests/min). Fine for daily coding; upgrade on Groq if you hit limits.
 
-In the **Extension Development Host** (or after installing the `.vsix`):
+### Other providers
 
-1. Command Palette → **`Autocorrect: Set API Key`**
-2. Choose **`groq`**
-3. Paste your `gsk_...` key
+| Provider | Notes |
+| --- | --- |
+| `gemini` | [Google AI Studio](https://aistudio.google.com) API key |
+| `anthropic` | [Anthropic Console](https://console.anthropic.com) API key |
+| `openai-compatible` | Set `autocorrect.baseUrl` (e.g. `http://localhost:11434/v1` for Ollama) |
 
-The key is saved in VS Code secret storage, not in `settings.json`.
+Set the provider in settings: `autocorrect.provider`.
 
-### 3. Confirm settings
+## Commands
 
-Default settings work out of the box:
+| Command | What it does |
+| --- | --- |
+| `Autocorrect: Toggle On/Off` | Turn the extension on or off (or click the status bar item) |
+| `Autocorrect: Set API Key` | Save or clear your provider API key |
+| `Autocorrect: Correct Selected Line` | Fix one selected line immediately (no Enter needed) |
+| `Autocorrect: Translate Selection to Current File's Language` | Convert a selection to the file's language |
+
+## Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `autocorrect.enabled` | `true` | Master on/off switch |
+| `autocorrect.provider` | `groq` | LLM provider |
+| `autocorrect.model` | `""` | Model ID (empty = provider default) |
+| `autocorrect.languages` | `["python"]` | Language IDs to activate (see below) |
+| `autocorrect.line.requireDiagnostic` | `true` | Only call the LLM if the language server shows an error on that line |
+| `autocorrect.line.debounceMs` | `800` | Delay after Enter before checking the previous line |
+| `autocorrect.debug` | `false` | Verbose logs in the LLM Autocorrect output channel |
+
+See **Settings → LLM Autocorrect** for the full list.
+
+### Supported languages
+
+Add language IDs to `autocorrect.languages`:
+
+`python`, `go`, `java`, `c`, `cpp`, `rust`, `zig`, `javascript`, `typescript`
+
+Example — Python and TypeScript:
 
 ```json
-{
-  "autocorrect.provider": "groq",
-  "autocorrect.model": "",
-  "autocorrect.languages": ["python"]
-}
+"autocorrect.languages": ["python", "typescript"]
 ```
 
-Leave `autocorrect.model` empty to use **`llama-3.1-8b-instant`**.
+## Cursor setup (Python)
 
-### 4. Smoke test
+If line autocorrect on Enter does nothing, check Python language support.
 
-1. Open a `.py` file in the host window
-2. Type `pritn("hello"` on one line
-3. Press **Enter** on the next line
-4. Check **Output → LLM Autocorrect**
-
-You should see either a correction or a diagnostic-gate message (see below).
-
-### 5. Optional: verify Groq directly
-
-```bash
-curl https://api.groq.com/openai/v1/chat/completions \
-  -H "Authorization: Bearer $GROQ_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"model\":\"llama-3.1-8b-instant\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi\"}]}"
-```
-
-## Squiggles / diagnostics (Cursor & VS Code)
-
-Line autocorrect can wait for a **language-server squiggle** before calling the LLM
-(`autocorrect.line.requireDiagnostic`, default `true`). This check is **local only** —
-it reads the same diagnostics as the **Problems** panel. It does **not** call Groq.
-
-If you never see red/yellow underlines, the extension will log:
-
-```text
-skip line N: no LSP squiggle within 1500ms (no API call made)
-```
-
-### Cursor
-
-Microsoft **Pylance** (`ms-python.vscode-pylance`) is not supported in Cursor. Avoid
-running it alongside Cursor's Python stack — they conflict.
-
-**Extensions (verified setup):**
-
-1. **Uninstall** these if present:
-   - **Cursor Pyright** (`anysphere.cursorpyright`)
-   - **Pylance** (`ms-python.vscode-pylance`)
-2. **Install** **Python** by **Anysphere** (`anysphere.python`)
-   - Search Extensions → `publisher:"Anysphere"` → **Python**
-   - Or open: `cursor:extension/anysphere.python`
-3. Select a Python interpreter: Command Palette → **`Python: Select Interpreter`**
-4. Add these to **User** settings (`Ctrl+,` → open `settings.json`):
+1. **Uninstall** if present: **Cursor Pyright**, **Pylance** (`ms-python.vscode-pylance`)
+2. **Install** **Python** by **Anysphere** (`anysphere.python`) — Extensions → `publisher:"Anysphere"`
+3. Command Palette → **`Python: Select Interpreter`**
+4. Recommended user settings:
 
 ```json
 {
@@ -121,82 +94,82 @@ running it alongside Cursor's Python stack — they conflict.
 
 | Setting | Why |
 | --- | --- |
-| `requireDiagnostic: false` | Reliable Enter-triggered fixes when LSP squiggles are slow or missing |
-| `python.languageServer: "Default"` | Uses Anysphere's bundled Python language server |
-| `typeCheckingMode: "all"` | Maximum diagnostics in **Problems** (optional if you re-enable the diagnostic gate) |
+| `requireDiagnostic: false` | Fixes on Enter even when squiggles are slow or missing |
+| `python.languageServer: "Default"` | Uses Anysphere's Python language server |
+| `typeCheckingMode: "all"` | More diagnostics in **Problems** (if you turn the diagnostic gate back on) |
 
-**Check that squiggles work (optional, for diagnostic gate):**
+To require a squiggle before each fix, set `autocorrect.line.requireDiagnostic` to `true` and confirm **View → Problems** shows errors for broken code.
 
-1. Open a `.py` file
-2. Type `pritn("x")` or `x =` (incomplete line)
-3. You should see underlines and entries in **View → Problems**
+## VS Code setup (Python)
 
-If Problems is empty, run **`Python: Restart Language Server`** from the command palette.
-
-**Extension Development Host:** the host is a separate window. Install **Anysphere Python**
-there too, or test in your main Cursor window after installing from a `.vsix`.
-
-### VS Code
-
-1. Install **Python** + **Pylance** (`ms-python.vscode-pylance`)
-2. Select an interpreter: **`Python: Select Interpreter`**
-3. Recommended settings:
+1. Install **Python** + **Pylance**
+2. **`Python: Select Interpreter`**
+3. Optional:
 
 ```json
 {
   "python.languageServer": "Pylance",
-  "python.analysis.typeCheckingMode": "basic",
-  "python.analysis.diagnosticMode": "workspace"
+  "python.analysis.typeCheckingMode": "basic"
 }
 ```
 
-### No squiggles? Workarounds
+## How it behaves
 
-| Option | Setting |
+**Line mode**
+
+- Triggers when you press **Enter** (not on every keystroke).
+- Skips blank lines and comments.
+- With `requireDiagnostic: true`, waits for a language-server error on that line before calling the LLM — **no API call** until then.
+- Applies at most one corrected line; you can undo with **Ctrl+Z**.
+
+**Paste-translate**
+
+- Detects paste that looks like a different language than the file.
+- Always asks before replacing anything.
+
+**Privacy**
+
+- Your API key stays in the editor's secret storage.
+- Code is sent to whichever provider you chose (Groq, Gemini, etc.) when a correction runs.
+
+## Troubleshooting
+
+| Problem | Try |
 | --- | --- |
-| Skip the diagnostic gate (always call LLM on Enter) | `"autocorrect.line.requireDiagnostic": false` |
-| Manual fix without Enter | Select line → **`Autocorrect: Correct Selected Line`** |
-| More time for LSP | `"autocorrect.line.diagnosticWaitMs": 3000` |
+| Nothing on Enter | Open a `.py` file; confirm Python is in `autocorrect.languages` |
+| `no LSP squiggle` in logs | Set `autocorrect.line.requireDiagnostic` to `false`, or fix Python/LSP setup above |
+| Manual works, Enter doesn't | Use **Correct Selected Line**, or disable the diagnostic gate |
+| `413` / token limit (Groq) | Selection too large; use single-line mode or a shorter selection |
+| No logs at all | Test in a **code file**, not the Output panel |
+| Extension Development Host (F5) | Install extensions and set API key **in that window** too |
 
-Enable `"autocorrect.debug": true` to see detailed gate logs in **LLM Autocorrect** output.
+Enable `"autocorrect.debug": true` for detailed logs.
 
-## How API calls stay rare and safe
+## Upcoming features
 
-- Line mode only fires on Enter, and only if the language server reports an
-  error/warning on that line (`autocorrect.line.requireDiagnostic`, on by default).
-  Blank and comment lines are skipped before any network call.
-- The model must return either exactly `UNCHANGED` or a single corrected line;
-  anything else (multi-line, empty, whitespace-only diff) is discarded.
-- Edits are re-validated against the buffer before applying: if the line changed,
-  or the cursor moved onto it, the correction is dropped. In-flight requests are
-  cancelled when you keep editing. A single undo reverts any correction.
-- Paste-translate never auto-replaces — it always asks first, and re-checks that
-  the pasted text is still intact before and after the LLM call.
+- **Code block capture window** — open a staging window to define exactly what gets sent to the LLM before a request goes out.
+- **Documentation / comments** — request docstrings or comments for the previous line or for the current code block window.
+- **Queued execution** — batch fixes in a window and run them on your schedule instead of applying corrections immediately on Enter.
 
-## Languages
+## License
 
-Enabled via `autocorrect.languages` (default: `["python"]`). Supported profiles:
-python, go, java, c, cpp, rust, zig, javascript, typescript. Suggested rollout
-order: Python → Go → Java/C/C++ → Rust/Zig (verify quality with your chosen model
-before enabling the harder ones).
+PolyForm Noncommercial 1.0.0 — personal and noncommercial use OK; commercial use by companies is not permitted. See [LICENSE](LICENSE).
 
-Adding a language = one entry in `src/languages.ts` (name for prompts + comment
-syntax for the pre-filter) plus optional detection heuristics for paste mode.
+## Development
 
-## Commands
+For building from source:
 
-| Command | What it does |
-| --- | --- |
-| `Autocorrect: Toggle On/Off` | Master switch (also: click the status bar item) |
-| `Autocorrect: Set API Key` | Store/clear a provider key in secret storage |
-| `Autocorrect: Correct Selected Line` | Fix the selected line (bypasses diagnostic gate) |
-| `Autocorrect: Translate Selection to Current File's Language` | Manual paste-translate on a selection |
+```bash
+git clone https://github.com/amittenak47/llm-autocorrect
+cd llm-autocorrect
+npm install
+npm run compile
+```
 
-## Tests
+Press **F5** to launch an Extension Development Host. Run **`Autocorrect: Set API Key`** in the host window.
 
 ```bash
 npm test
 ```
 
-Manual cases: `tests/python_line_autocorrect.py` (see `tests/README.md`).
-
+Contributor docs: `tests/README.md`.
