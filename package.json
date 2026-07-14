@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -33,6 +33,94 @@
       {
         "command": "autocorrect.correctSelection",
         "title": "Autocorrect: Correct Selected Line"
+      },
+      {
+        "command": "autocorrect.correctBlock",
+        "title": "Autocorrect: Correct Selected Block"
+      },
+      {
+        "command": "autocorrect.startBlockCapture",
+        "title": "Autocorrect: Start Block Capture"
+      },
+      {
+        "command": "autocorrect.endBlockCapture",
+        "title": "Autocorrect: End Block Capture & Correct"
+      },
+      {
+        "command": "autocorrect.cancelBlockCapture",
+        "title": "Autocorrect: Cancel Block Capture"
+      },
+      {
+        "command": "autocorrect.documentBlock",
+        "title": "Autocorrect: Document Selection / Previous Line (Docstrings & Comments)"
+      },
+      {
+        "command": "autocorrect.cavemanComment",
+        "title": "Autocorrect: Caveman Comments (Ultra-Short Inline)"
+      },
+      {
+        "command": "autocorrect.reviewQueuedFixes",
+        "title": "Autocorrect: Review Queued Fixes"
+      },
+      {
+        "command": "autocorrect.applyQueuedFixes",
+        "title": "Autocorrect: Apply All Queued Fixes"
+      },
+      {
+        "command": "autocorrect.clearQueuedFixes",
+        "title": "Autocorrect: Clear Queued Fixes"
+      },
+      {
+        "command": "autocorrect.toggleQueueMode",
+        "title": "Autocorrect: Toggle Queued Fix Mode"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "autocorrect.correctBlock",
+        "key": "ctrl+alt+a b",
+        "mac": "cmd+alt+a b",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "autocorrect.startBlockCapture",
+        "key": "ctrl+alt+a s",
+        "mac": "cmd+alt+a s",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "autocorrect.endBlockCapture",
+        "key": "ctrl+alt+a e",
+        "mac": "cmd+alt+a e",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "autocorrect.cancelBlockCapture",
+        "key": "ctrl+alt+a escape",
+        "mac": "cmd+alt+a escape",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "autocorrect.documentBlock",
+        "key": "ctrl+alt+a d",
+        "mac": "cmd+alt+a d",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "autocorrect.cavemanComment",
+        "key": "ctrl+alt+a c",
+        "mac": "cmd+alt+a c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "autocorrect.reviewQueuedFixes",
+        "key": "ctrl+alt+a q",
+        "mac": "cmd+alt+a q"
+      },
+      {
+        "command": "autocorrect.applyQueuedFixes",
+        "key": "ctrl+alt+a enter",
+        "mac": "cmd+alt+a enter"
       }
     ],
     "configuration": {
@@ -108,6 +196,16 @@
           "type": "number",
           "default": 5000,
           "description": "Abort LLM requests that take longer than this."
+        },
+        "autocorrect.block.confirmBeforeSend": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a confirmation (with line count and token estimate) before a captured block is sent to the LLM."
+        },
+        "autocorrect.queue.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Queue line fixes for review instead of applying them immediately on Enter. Review with 'Autocorrect: Review Queued Fixes' (Ctrl+Alt+A Q) or apply all with Ctrl+Alt+A Enter."
         }
       }
     }

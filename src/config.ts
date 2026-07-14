@@ -15,6 +15,8 @@ export function cfg() {
     diagnosticWaitMs: c.get<number>("line.diagnosticWaitMs", 1500),
     debug: c.get<boolean>("debug", false),
     timeoutMs: c.get<number>("timeoutMs", 5000),
+    blockConfirm: c.get<boolean>("block.confirmBeforeSend", true),
+    queueEnabled: c.get<boolean>("queue.enabled", false),
   };
 }
 
@@ -22,4 +24,10 @@ export async function setEnabled(value: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration("autocorrect")
     .update("enabled", value, vscode.ConfigurationTarget.Global);
+}
+
+export async function setQueueEnabled(value: boolean): Promise<void> {
+  await vscode.workspace
+    .getConfiguration("autocorrect")
+    .update("queue.enabled", value, vscode.ConfigurationTarget.Global);
 }

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
+import { FixQueue } from "./fixQueue";
 import { LlmClient, stripFences } from "./llm";
 import { trimContextLines } from "./promptLimits";
 import { StatusBar } from "./statusBar";
@@ -28,6 +29,7 @@ export class LineCorrector implements vscode.Disposable {
   constructor(
     private readonly llm: LlmClient,
     private readonly statusBar: StatusBar,
+    private readonly queue: FixQueue,
     private readonly output: vscode.OutputChannel
   ) {
     this.highlight = vscode.window.createTextEditorDecorationType({
@@ -352,6 +354,13 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
     if (!force && this.cursorOnLine(doc, line)) {
+      return;
+    }
+
+    // Queued mode: stage automatic fixes for later review instead of applying on Enter.
+    // Manual correction (force) still applies immediately — the user explicitly asked.
+    if (!force && cfg().queueEnabled) {
+      this.queue.add(doc, line, original, corrected);
       return;
     }
 
