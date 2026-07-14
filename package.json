@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "amittenak47",
   "private": false,
   "engines": {

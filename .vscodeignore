@@ -1,7 +1,7 @@
 .vscode/**
 src/**
 tests/**
-data/**
+CONTRIBUTING.md
 .mimicflow/**
 .claude/**
 tsconfig.json
