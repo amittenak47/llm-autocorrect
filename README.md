@@ -30,6 +30,25 @@ Default model (when `autocorrect.model` is empty): **`llama-3.1-8b-instant`**.
 
 Free tier is rate-limited (~30 requests/min). Fine for daily coding; upgrade on Groq if you hit limits.
 
+### Pick a small, fast model (save tokens)
+
+Line autocorrect sends a short prompt per fix — you do **not** need a large model. Smaller models are faster, cheaper, and less likely to hit Groq's per-request token cap.
+
+| Provider | Good defaults | Avoid for line fixes |
+| --- | --- | --- |
+| Groq | `llama-3.1-8b-instant` (default), `llama-3.1-70b-versatile` if you need more accuracy | 70B+ for every keystroke — slower, burns TPM |
+| Gemini | `gemini-2.5-flash-lite` (default) | Pro / large context models on small edits |
+| Anthropic | `claude-haiku-4-5-20251001` (default) | Opus / Sonnet for single-line typos |
+| Ollama | `llama3.2`, `phi3`, `gemma2:2b` | 70B local models unless you have the GPU headroom |
+
+Set explicitly if you want:
+
+```json
+"autocorrect.model": "llama-3.1-8b-instant"
+```
+
+**Tips to waste fewer tokens:** keep `autocorrect.line.requireDiagnostic` on when your language server works (skips clean lines), use line mode instead of translating huge selections, and enable `autocorrect.debug` only while troubleshooting.
+
 ### Other providers
 
 | Provider | Notes |
@@ -65,7 +84,9 @@ See **Settings → LLM Autocorrect** for the full list.
 
 ### Supported languages
 
-Add language IDs to `autocorrect.languages`:
+**Python works out of the box** — it's the only language enabled by default.
+
+Other languages are **built in but not fully tested yet**. You can try them by adding their VS Code language ID to `autocorrect.languages` and installing that language's extension (e.g. rust-analyzer for Rust, gopls for Go). Quality may vary until we've tested each one.
 
 `python`, `go`, `java`, `c`, `cpp`, `rust`, `zig`, `javascript`, `typescript`
 
@@ -74,6 +95,8 @@ Example — Python and TypeScript:
 ```json
 "autocorrect.languages": ["python", "typescript"]
 ```
+
+You also need a language server that reports diagnostics in **Problems** if you use `autocorrect.line.requireDiagnostic`.
 
 ## Cursor setup (Python)
 
@@ -149,7 +172,9 @@ Enable `"autocorrect.debug": true` for detailed logs.
 
 - **Code block capture window** — open a staging window to define exactly what gets sent to the LLM before a request goes out.
 - **Documentation / comments** — request docstrings or comments for the previous line or for the current code block window.
+- **Caveman-style comments** — ultra-short inline comments (`# get user`, `// loop nums`) generated on demand.
 - **Queued execution** — batch fixes in a window and run them on your schedule instead of applying corrections immediately on Enter.
+- **Testing other languages** — verify and tune line autocorrect for Go, Java, C/C++, Rust, Zig, and JS/TS beyond the current Python-focused defaults.
 
 ## License
 
@@ -157,7 +182,7 @@ PolyForm Noncommercial 1.0.0 — personal and noncommercial use OK; commercial u
 
 ## Development
 
-For building from source:
+### Build from source
 
 ```bash
 git clone https://github.com/amittenak47/llm-autocorrect
@@ -173,3 +198,31 @@ npm test
 ```
 
 Contributor docs: `tests/README.md`.
+
+### Package and install locally (`vsce`)
+
+Install the packaging tool once:
+
+```bash
+npm install -g @vscode/vsce
+```
+
+Build a `.vsix` and install it in VS Code or Cursor:
+
+```bash
+npm run compile
+vsce package
+```
+
+Then in the editor: **Extensions → ⋯ → Install from VSIX** → select `llm-autocorrect-0.0.1.vsix`.
+
+Reload the window, then run **`Autocorrect: Set API Key`**.
+
+To publish to the Marketplace (after creating a [publisher](https://marketplace.visualstudio.com/manage)):
+
+```bash
+vsce login <publisher-id>
+vsce publish
+```
+
+Marketplace publishing uses an **Azure DevOps Personal Access Token**, not your GitHub token.
