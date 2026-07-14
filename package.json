@@ -123,5 +123,5 @@
     "typescript": "^5.4.0"
   },
   "repository": { "type": "git", "url": "https://github.com/amittenak47/llm-autocorrect" },
-  "license": "MIT"
+  "license": "SEE LICENSE IN LICENSE"
 }
