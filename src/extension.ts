@@ -6,7 +6,7 @@ import { PasteTranslator } from "./pasteTranslator";
 import { StatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const output = vscode.window.createOutputChannel("AI Autocorrect");
+  const output = vscode.window.createOutputChannel("LLM Autocorrect");
   const statusBar = new StatusBar();
   const llm = new LlmClient(context.secrets);
   const lineCorrector = new LineCorrector(llm, statusBar, output);

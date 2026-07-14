@@ -1,10 +1,10 @@
 """
-Manual test cases for AI Autocorrect (Python line mode).
+Manual test cases for LLM Autocorrect (Python line mode).
 
 How to run:
   1. F5 → Extension Development Host
   2. Open this file in the host window
-  3. View → Output → "AI Autocorrect"
+  3. View → Output → "LLM Autocorrect"
   4. For each CASE below: edit the broken line, press Enter on the NEXT line
   5. Or select the broken line → "Autocorrect: Correct Selected Line"
 

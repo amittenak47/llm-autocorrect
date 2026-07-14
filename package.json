@@ -1,10 +1,10 @@
 {
-  "name": "ai-autocorrect",
-  "displayName": "AI Autocorrect",
+  "name": "llm-autocorrect",
+  "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
   "version": "0.0.1",
-  "publisher": "amit",
-  "private": true,
+  "publisher": "amittenak47",
+  "private": false,
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -35,7 +35,7 @@
       }
     ],
     "configuration": {
-      "title": "AI Autocorrect",
+      "title": "LLM Autocorrect",
       "properties": {
         "autocorrect.enabled": {
           "type": "boolean",
@@ -101,7 +101,7 @@
         "autocorrect.debug": {
           "type": "boolean",
           "default": false,
-          "description": "Log skip reasons and scheduling details to the AI Autocorrect output channel."
+          "description": "Log skip reasons and scheduling details to the LLM Autocorrect output channel."
         },
         "autocorrect.timeoutMs": {
           "type": "number",
@@ -121,5 +121,7 @@
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.4.0"
-  }
+  },
+  "repository": { "type": "git", "url": "https://github.com/amittenak47/llm-autocorrect" },
+  "license": "MIT"
 }

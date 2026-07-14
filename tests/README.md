@@ -5,7 +5,7 @@
 1. Press **F5** in the project window.
 2. In the **Extension Development Host**, open `tests/python_line_autocorrect.py`.
 3. Run **`Autocorrect: Set API Key`** in the host (keys are per-window).
-4. Watch **Output → AI Autocorrect** while testing.
+4. Watch **Output → LLM Autocorrect** while testing.
 
 | File | Purpose |
 | --- | --- |

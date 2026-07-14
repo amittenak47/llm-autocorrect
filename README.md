@@ -1,4 +1,4 @@
-# AI Autocorrect
+# LLM Autocorrect
 
 A VS Code extension with two modes built on one LLM pipeline:
 
@@ -27,7 +27,7 @@ Then in the dev host:
 3. Open a Python file and type something broken, e.g. `pritn("hello"` — press Enter.
 
 The status bar item (right side) shows on/off state and a spinner during requests;
-click it to toggle. The **AI Autocorrect** output channel logs every correction.
+click it to toggle. The **LLM Autocorrect** output channel logs every correction.
 
 ## How API calls stay rare and safe
 
