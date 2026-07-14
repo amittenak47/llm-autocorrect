@@ -1,0 +1,9 @@
+node_modules/
+out/
+*.vsix
+
+# Leetcode Test Cases
+/data
+/.vscode
+/.mimicflow
+/.claude

@@ -1,0 +1,125 @@
+{
+  "name": "ai-autocorrect",
+  "displayName": "AI Autocorrect",
+  "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
+  "version": "0.0.1",
+  "publisher": "amit",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "autocorrect.toggle",
+        "title": "Autocorrect: Toggle On/Off"
+      },
+      {
+        "command": "autocorrect.setApiKey",
+        "title": "Autocorrect: Set API Key"
+      },
+      {
+        "command": "autocorrect.translateSelection",
+        "title": "Autocorrect: Translate Selection to Current File's Language"
+      },
+      {
+        "command": "autocorrect.correctSelection",
+        "title": "Autocorrect: Correct Selected Line"
+      }
+    ],
+    "configuration": {
+      "title": "AI Autocorrect",
+      "properties": {
+        "autocorrect.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Master switch for the whole extension."
+        },
+        "autocorrect.line.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fix typos/syntax errors on the previous line when you press Enter."
+        },
+        "autocorrect.paste.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer to translate pasted code that looks like a different language than the current file."
+        },
+        "autocorrect.provider": {
+          "type": "string",
+          "enum": [
+            "groq",
+            "gemini",
+            "anthropic",
+            "openai-compatible"
+          ],
+          "default": "groq",
+          "description": "LLM provider. Set the API key via the 'Autocorrect: Set API Key' command (stored in VS Code secret storage, not settings)."
+        },
+        "autocorrect.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID. Leave empty for the provider default (groq: llama-3.1-8b-instant, gemini: gemini-2.5-flash-lite, anthropic: claude-haiku-4-5-20251001)."
+        },
+        "autocorrect.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL for the 'openai-compatible' provider, e.g. http://localhost:11434/v1"
+        },
+        "autocorrect.languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "python"
+          ],
+          "description": "VS Code language IDs the extension is active for. Supported: python, go, java, c, cpp, rust, zig, javascript, typescript."
+        },
+        "autocorrect.line.requireDiagnostic": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only call the LLM when the language server reports an error/warning on the line (strongly recommended — kills most API calls and false corrections)."
+        },
+        "autocorrect.line.debounceMs": {
+          "type": "number",
+          "default": 800,
+          "description": "Delay after pressing Enter before checking the previous line. Also gives the language server time to publish diagnostics."
+        },
+        "autocorrect.line.diagnosticWaitMs": {
+          "type": "number",
+          "default": 1500,
+          "description": "How long to wait for a language-server diagnostic on the line before skipping (only when autocorrect.line.requireDiagnostic is true)."
+        },
+        "autocorrect.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log skip reasons and scheduling details to the AI Autocorrect output channel."
+        },
+        "autocorrect.timeoutMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Abort LLM requests that take longer than this."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test tests/unit/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
