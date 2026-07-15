@@ -83,40 +83,50 @@ Set the provider in settings: `autocorrect.provider`.
 
 ## Commands
 
-### Modal menu (recommended)
+### Modal menu
 
-**Double-tap `Ctrl`** (`Cmd` on macOS) in the editor → **menu mode** (status bar shows options). Press one key:
-
-| Key | Action |
-| --- | --- |
-| `A` | Correct selected block |
-| `S` | Keyboard block capture → **WASD adjust mode** (below) |
-| `D` | Docstrings & comments |
-| `F` | Caveman inline comments |
-| `Q` | Review queued fixes |
-| `L` | Correct selected line |
-| `Esc` | Exit menu |
-
-**Fallback:** `Ctrl+Shift+;` (`Cmd+Shift+;` on macOS). **Always works:** Command Palette → **`Autocorrect: Enter Menu Mode`**.
-
-Check **View → Output → LLM Autocorrect** for `[mode] menu mode ON` after entering menu mode.
-
-### Capture adjust mode (after `S` in menu)
-
-Green highlight marks the block. **WASD** moves the far end of the range (no arrow keys needed):
+**`Ctrl+Shift+;`** (or double-tap **`Ctrl`**) → menu mode. Status bar shows keys.
 
 | Key | Action |
 | --- | --- |
-| `W` / `S` | Move block end up / down one line |
-| `A` / `D` | Move block end to start / end of line |
-| `E` or `Enter` | Send block to LLM |
-| `Esc` | Cancel |
+| `A` | Fix block — immediate |
+| `Shift+A` | Stage block (selection) → attribute mode |
+| `S` | Capture mode (WASD) → **`E`** stages block |
+| `C` | Fix cursor line — immediate |
+| `Shift+C` | Stage cursor line → attribute mode |
+| `Q` | Review queue |
+| `Esc` | Exit menu (clears staged block) |
 
-You can still **type** to grow a capture the old way: Command Palette → **Start Block Capture**, type, **End Block Capture**.
+### Staged mode (after `Shift+A` / `Shift+C` / capture `E`)
 
-### Command Palette / QuickPick
+Green highlight on the staged block. Status bar shows flags.
 
-`Ctrl+Shift+P` → `Autocorrect: …` for every command. **Autocorrect: Command Menu (QuickPick)** is a searchable `/block`-style list if you prefer a picker over modal keys.
+| Key | Action |
+| --- | --- |
+| `D` | Docs flag |
+| `F` | Caveman flag |
+| `X` | Context note (prepended to prompt; saved with queued items) |
+| `E` | Send now |
+| `Shift+E` | Enqueue for review |
+| `A` / `C` | Still work as instant fix shortcuts |
+| `Esc` | Cancel staged block |
+
+Queued items show **op** (`fix` / `docs` / `caveman`) and context note in the review picker.
+
+### Capture mode (after `S`)
+
+| Key | Action |
+| --- | --- |
+| `W` / `S` | Move end up / down |
+| `A` / `D` | Line start / end |
+| `E` | **Finish** sizing → staged mode |
+| `Esc` | Cancel capture |
+
+After **`E`**, set flags with **`D`** / **`F`** / **`X`**, then **`E`** (send) or **`Shift+E`** (queue).
+
+No send confirmation popup — progress shows in the **status bar** (bottom right).
+
+Command Palette lists only user-facing commands; key-only actions are hidden.
 
 ## Block capture
 
@@ -151,9 +161,10 @@ Set `autocorrect.queue.enabled: true` (or run `Autocorrect: Toggle Queued Fix Mo
 | `autocorrect.provider` | `groq` | LLM provider |
 | `autocorrect.model` | `""` | Model ID (empty = provider default) |
 | `autocorrect.languages` | `["python"]` | Language IDs to activate (see below) |
-| `autocorrect.line.requireDiagnostic` | `true` | Only call the LLM if the language server shows an error on that line |
+| `autocorrect.line.requireDiagnostic` | `true` | **Enter only:** call the LLM only when the language server shows an error on the line you left. Set `false` to fix on Enter without a squiggle. |
+| `autocorrect.fix.requireDiagnostic` | `false` | **Manual fixes** (menu A/C, staged E, palette): when `true`, only run if the target has an LSP error. Default `false` — send anytime. |
+| `autocorrect.prompt.prefix` | `""` | Global context prepended to every LLM prompt (project rules, file purpose, etc.). Combined with staged **X** notes. |
 | `autocorrect.line.debounceMs` | `800` | Delay after Enter before checking the previous line |
-| `autocorrect.block.confirmBeforeSend` | `true` | Confirm (with token estimate) before a captured block is sent |
 | `autocorrect.queue.enabled` | `false` | Stage Enter-fixes in the review queue instead of applying them |
 | `autocorrect.debug` | `false` | Verbose logs in the LLM Autocorrect output channel |
 

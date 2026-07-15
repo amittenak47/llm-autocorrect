@@ -1,27 +1,24 @@
 import * as vscode from "vscode";
 import { shiftLine } from "./blockMath";
+import { StagedOp } from "./stagedSession";
 import { StatusBar } from "./statusBar";
 
 interface QueuedFix {
   uri: string;
-  line: number;
+  fileName: string;
+  label: string;
   original: string;
   corrected: string;
-  fileName: string;
+  op: StagedOp;
+  contextNote: string;
+  line: number;
+  endLine?: number;
 }
 
 interface QueueQuickPickItem extends vscode.QuickPickItem {
   fix: QueuedFix;
 }
 
-/**
- * Queued execution: with autocorrect.queue.enabled, line fixes are staged here
- * instead of being applied on Enter. Queued lines get a faint amber highlight;
- * the user reviews/applies them on their own schedule (QuickPick "window").
- *
- * Queued line numbers track buffer edits; a fix whose line was edited directly
- * is dropped once its text no longer matches what the LLM saw.
- */
 export class FixQueue implements vscode.Disposable {
   private fixes: QueuedFix[] = [];
   private readonly decoration: vscode.TextEditorDecorationType;
@@ -50,37 +47,73 @@ export class FixQueue implements vscode.Disposable {
     return this.fixes.length;
   }
 
-  add(doc: vscode.TextDocument, line: number, original: string, corrected: string): void {
+  addLine(doc: vscode.TextDocument, line: number, original: string, corrected: string): void {
+    this.add(doc, line, line, original, corrected, `line ${line + 1}`, "fix", "");
+  }
+
+  addBlock(
+    doc: vscode.TextDocument,
+    startLine: number,
+    endLine: number,
+    original: string,
+    corrected: string,
+    label: string,
+    op: StagedOp,
+    contextNote: string
+  ): void {
+    this.add(doc, startLine, endLine, original, corrected, label, op, contextNote);
+  }
+
+  private add(
+    doc: vscode.TextDocument,
+    startLine: number,
+    endLine: number,
+    original: string,
+    corrected: string,
+    label: string,
+    op: StagedOp,
+    contextNote: string
+  ): void {
     const uri = doc.uri.toString();
-    const existing = this.fixes.find((f) => f.uri === uri && f.line === line);
-    if (existing) {
-      existing.original = original;
-      existing.corrected = corrected;
-    } else {
-      this.fixes.push({ uri, line, original, corrected, fileName: doc.fileName });
-    }
-    this.output.appendLine(
-      `[queue] ${doc.fileName}:${line + 1} queued "${original.trim()}" -> "${corrected.trim()}" (${this.fixes.length} pending)`
+    const existing = this.fixes.find(
+      (f) => f.uri === uri && f.line === startLine && f.endLine === endLine
     );
+    const entry: QueuedFix = {
+      uri,
+      fileName: doc.fileName,
+      label,
+      original,
+      corrected,
+      op,
+      contextNote,
+      line: startLine,
+      endLine: endLine === startLine ? undefined : endLine,
+    };
+    if (existing) {
+      Object.assign(existing, entry);
+    } else {
+      this.fixes.push(entry);
+    }
+    this.output.appendLine(`[queue] ${doc.fileName} queued ${label} (${this.fixes.length} pending)`);
     this.sync();
   }
 
-  /** Review "window": a multi-select QuickPick. Checked fixes apply, unchecked are discarded. */
   async review(): Promise<void> {
     if (this.fixes.length === 0) {
-      void vscode.window.showInformationMessage("Autocorrect: the fix queue is empty.");
+      vscode.window.setStatusBarMessage("Autocorrect: queue empty", 3000);
       return;
     }
     const items: QueueQuickPickItem[] = this.fixes.map((f) => ({
-      label: `$(edit) ${shortName(f.fileName)}:${f.line + 1}`,
-      description: `${f.original.trim()} → ${f.corrected.trim()}`,
+      label: `$(edit) ${shortName(f.fileName)} — ${f.op}`,
+      description: queueDescription(f),
+      detail: f.contextNote || undefined,
       picked: true,
       fix: f,
     }));
     const chosen = await vscode.window.showQuickPick(items, {
       canPickMany: true,
       title: "Autocorrect: queued fixes",
-      placeHolder: "Enter applies checked fixes and discards unchecked ones; Esc keeps the queue",
+      placeHolder: "Enter applies checked; unchecked are discarded; Esc keeps queue",
     });
     if (!chosen) {
       return;
@@ -88,9 +121,8 @@ export class FixQueue implements vscode.Disposable {
     const keep = new Set(chosen.map((i) => i.fix));
     const rejected = this.fixes.filter((f) => !keep.has(f));
     if (rejected.length > 0) {
-      this.output.appendLine(`[queue] discarded ${rejected.length} fix(es) after review`);
+      this.output.appendLine(`[queue] discarded ${rejected.length} item(s) after review`);
     }
-    // Drop unchecked fixes from the queue; apply only what the user kept.
     this.fixes = this.fixes.filter((f) => keep.has(f));
     this.sync();
     await this.apply([...keep]);
@@ -98,7 +130,7 @@ export class FixQueue implements vscode.Disposable {
 
   async applyAll(): Promise<void> {
     if (this.fixes.length === 0) {
-      void vscode.window.showInformationMessage("Autocorrect: the fix queue is empty.");
+      vscode.window.setStatusBarMessage("Autocorrect: queue empty", 3000);
       return;
     }
     await this.apply([...this.fixes]);
@@ -109,9 +141,9 @@ export class FixQueue implements vscode.Disposable {
     this.fixes = [];
     this.sync();
     if (n > 0) {
-      this.output.appendLine(`[queue] cleared ${n} fix(es)`);
+      this.output.appendLine(`[queue] cleared ${n} item(s)`);
     }
-    vscode.window.setStatusBarMessage(`Autocorrect: cleared ${n} queued fix(es)`, 3000);
+    vscode.window.setStatusBarMessage(`Autocorrect: cleared ${n} queued item(s)`, 3000);
   }
 
   private async apply(toApply: QueuedFix[]): Promise<void> {
@@ -120,26 +152,43 @@ export class FixQueue implements vscode.Disposable {
     let stale = 0;
     for (const f of toApply) {
       const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === f.uri);
-      if (!doc || doc.isClosed || f.line >= doc.lineCount || doc.lineAt(f.line).text !== f.original) {
+      if (!doc || doc.isClosed) {
         stale++;
         continue;
       }
-      edit.replace(doc.uri, new vscode.Range(f.line, 0, f.line, f.original.length), f.corrected);
+      const range = this.fixRange(doc, f);
+      if (!range || doc.getText(range) !== f.original) {
+        stale++;
+        continue;
+      }
+      edit.replace(doc.uri, range, f.corrected);
       staged++;
     }
-    // Remove everything we handled before applying, so our own change events don't churn.
     const handled = new Set(toApply);
     this.fixes = this.fixes.filter((f) => !handled.has(f));
     this.sync();
 
     const ok = staged === 0 || (await vscode.workspace.applyEdit(edit));
     const summary =
-      `applied ${ok ? staged : 0} fix(es)` + (stale > 0 ? `, skipped ${stale} stale` : "");
+      `applied ${ok ? staged : 0} item(s)` + (stale > 0 ? `, skipped ${stale} stale` : "");
     this.output.appendLine(`[queue] ${summary}`);
     vscode.window.setStatusBarMessage(`Autocorrect: ${summary}`, 4000);
   }
 
-  /** Keep queued line numbers in step with buffer edits; drop fixes the user overwrote. */
+  private fixRange(doc: vscode.TextDocument, f: QueuedFix): vscode.Range | undefined {
+    const end = f.endLine ?? f.line;
+    if (f.line >= doc.lineCount || end >= doc.lineCount) {
+      return undefined;
+    }
+    if (f.endLine === undefined) {
+      return new vscode.Range(f.line, 0, f.line, doc.lineAt(f.line).text.length);
+    }
+    return new vscode.Range(
+      f.line, 0,
+      end, doc.lineAt(end).text.length
+    );
+  }
+
   private onDocChange(e: vscode.TextDocumentChangeEvent): void {
     const uri = e.document.uri.toString();
     const docFixes = this.fixes.filter((f) => f.uri === uri);
@@ -150,6 +199,12 @@ export class FixQueue implements vscode.Disposable {
     for (const change of e.contentChanges) {
       const addedLines = change.text.split(/\r?\n/).length - 1;
       for (const f of docFixes) {
+        if (f.endLine !== undefined) {
+          if (change.range.start.line <= f.endLine && change.range.end.line >= f.line) {
+            touched.add(f);
+          }
+          continue;
+        }
         const shifted = shiftLine(f.line, change.range.start.line, change.range.end.line, addedLines);
         f.line = shifted.line;
         if (shifted.touched) {
@@ -162,15 +217,15 @@ export class FixQueue implements vscode.Disposable {
       if (!touched.has(f)) {
         return true;
       }
-      const stillValid =
-        f.line < e.document.lineCount && e.document.lineAt(f.line).text === f.original;
+      const range = this.fixRange(e.document, f);
+      const stillValid = range !== undefined && e.document.getText(range) === f.original;
       if (!stillValid) {
         dropped++;
       }
       return stillValid;
     });
     if (dropped > 0) {
-      this.output.appendLine(`[queue] dropped ${dropped} fix(es) — the line(s) were edited`);
+      this.output.appendLine(`[queue] dropped ${dropped} item(s) — buffer changed`);
     }
     this.sync();
   }
@@ -194,7 +249,14 @@ export class FixQueue implements vscode.Disposable {
       const uri = editor.document.uri.toString();
       const ranges = this.fixes
         .filter((f) => f.uri === uri && f.line < editor.document.lineCount)
-        .map((f) => new vscode.Range(f.line, 0, f.line, 0));
+        .map((f) => {
+          const end = f.endLine ?? f.line;
+          const doc = editor.document;
+          if (end >= doc.lineCount) {
+            return new vscode.Range(f.line, 0, f.line, 0);
+          }
+          return new vscode.Range(f.line, 0, end, doc.lineAt(end).text.length);
+        });
       editor.setDecorations(this.decoration, ranges);
     }
   }
@@ -209,4 +271,15 @@ export class FixQueue implements vscode.Disposable {
 function shortName(fileName: string): string {
   const parts = fileName.split(/[\\/]/);
   return parts[parts.length - 1] || fileName;
+}
+
+function preview(original: string, corrected: string): string {
+  const a = original.trim().replace(/\s+/g, " ").slice(0, 40);
+  const b = corrected.trim().replace(/\s+/g, " ").slice(0, 40);
+  return `${a} → ${b}`;
+}
+
+function queueDescription(f: QueuedFix): string {
+  const head = f.label.length > 50 ? `${f.label.slice(0, 50)}…` : f.label;
+  return `${head} · ${preview(f.original, f.corrected)}`;
 }

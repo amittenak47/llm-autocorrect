@@ -1,9 +1,12 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
+import { shouldFixLine } from "./diagnosticGate";
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
 import { FixQueue } from "./fixQueue";
-import { LlmClient, stripFences } from "./llm";
+import { LlmClient } from "./llm";
+import { lineFixUserMessage } from "./promptContext";
 import { trimContextLines } from "./promptLimits";
+import { fixForSingleLineTarget, isUnchanged, modelLines, normalizeModelText } from "./responseIngress";
 import { StatusBar } from "./statusBar";
 
 const CONTEXT_LINES = 10;
@@ -11,10 +14,6 @@ const CONTEXT_LINES = 10;
 interface Pending {
   timer?: ReturnType<typeof setTimeout>;
   abort?: AbortController;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -50,55 +49,6 @@ export class LineCorrector implements vscode.Disposable {
     if (cfg().debug) {
       this.output.appendLine(`[line] ${message}`);
     }
-  }
-
-  private describeDiagnostics(uri: vscode.Uri, line?: number): string[] {
-    const diags = vscode.languages.getDiagnostics(uri);
-    const filtered =
-      line === undefined
-        ? diags
-        : diags.filter(
-            (d) => d.range.start.line <= line && line <= d.range.end.line
-          );
-    return filtered.map((d) => {
-      const sev = vscode.DiagnosticSeverity[d.severity] ?? String(d.severity);
-      const msg = d.message.split("\n")[0].slice(0, 100);
-      return `L${d.range.start.line + 1} [${sev}] ${msg}`;
-    });
-  }
-
-  private logDiagnosticGate(
-    uri: vscode.Uri, line: number, passed: boolean, waitedMs: number, forced: boolean
-  ): void {
-    if (forced) {
-      this.output.appendLine("[line] diagnostic gate: bypassed (manual correct command)");
-      return;
-    }
-    if (passed) {
-      const found = this.describeDiagnostics(uri, line);
-      this.output.appendLine(
-        `[line] diagnostic gate: passed after ${waitedMs}ms — ${found.join(" | ")}`
-      );
-      return;
-    }
-    const onLine = this.describeDiagnostics(uri, line);
-    const inFile = this.describeDiagnostics(uri);
-    this.output.appendLine(
-      `[line] skip line ${line + 1}: no LSP squiggle within ${waitedMs}ms (no API call made)`
-    );
-    this.output.appendLine(
-      `[line]   squiggles on this line: ${onLine.length ? onLine.join(" | ") : "(none)"}`
-    );
-    if (inFile.length > 0) {
-      this.output.appendLine(`[line]   squiggles in file: ${inFile.join(" | ")}`);
-    } else {
-      this.output.appendLine(
-        "[line]   squiggles in file: (none) — install Anysphere Python, select an interpreter, reload window"
-      );
-    }
-    this.output.appendLine(
-      "[line]   tip: set autocorrect.line.requireDiagnostic to false to always call the LLM on Enter"
-    );
   }
 
   /** Line the user just left when this change inserts a leading newline (Enter). */
@@ -227,26 +177,40 @@ export class LineCorrector implements vscode.Disposable {
     return editor.selections.some((s) => s.start.line <= line && line <= s.end.line);
   }
 
-  /** Manual fallback: correct the selected line without waiting for Enter. */
-  async correctSelection(): Promise<void> {
+  /** Menu C: correct cursor line, else previous non-blank line. */
+  async correctLineNearCursor(queue = false): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.selection.isEmpty) {
-      void vscode.window.showInformationMessage("Autocorrect: select the line to correct first.");
+    if (!editor) {
+      vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
       return;
     }
     const profile = PROFILES[editor.document.languageId];
     if (!profile || !cfg().languages.includes(editor.document.languageId)) {
-      void vscode.window.showInformationMessage(
-        `Autocorrect: unsupported or disabled language "${editor.document.languageId}".`
+      vscode.window.setStatusBarMessage(
+        `Autocorrect: unsupported language "${editor.document.languageId}"`,
+        4000
       );
       return;
     }
-    const line = editor.selection.start.line;
-    if (editor.selection.end.line !== line) {
-      void vscode.window.showInformationMessage("Autocorrect: select a single line to correct.");
+    const doc = editor.document;
+    let line = editor.selection.active.line;
+    if (!editor.selection.isEmpty) {
+      line = editor.selection.start.line;
+      if (editor.selection.end.line !== line) {
+        vscode.window.setStatusBarMessage("Autocorrect: select a single line for C", 3000);
+        return;
+      }
+    } else if (doc.lineAt(line).text.trim().length === 0) {
+      line--;
+      while (line >= 0 && doc.lineAt(line).text.trim().length === 0) {
+        line--;
+      }
+    }
+    if (line < 0) {
+      vscode.window.setStatusBarMessage("Autocorrect: no line to correct", 3000);
       return;
     }
-    await this.check(editor.document.uri, line, profile, true);
+    await this.check(doc.uri, line, profile, true, queue);
   }
 
   private docFor(uri: vscode.Uri): vscode.TextDocument | undefined {
@@ -254,7 +218,7 @@ export class LineCorrector implements vscode.Disposable {
   }
 
   private async check(
-    uri: vscode.Uri, line: number, profile: LanguageProfile, force: boolean
+    uri: vscode.Uri, line: number, profile: LanguageProfile, force: boolean, queue = false
   ): Promise<void> {
     const doc = this.docFor(uri);
     if (!doc || doc.isClosed || line >= doc.lineCount) {
@@ -271,19 +235,16 @@ export class LineCorrector implements vscode.Disposable {
       this.log(`skip line ${line + 1}: cursor still on line`);
       return;
     }
-    // Diagnostics gate: local LSP check only — never calls the LLM API.
-    if (!force && cfg().requireDiagnostic) {
-      const waitMs = cfg().diagnosticWaitMs;
-      this.output.appendLine(
-        `[line] diagnostic gate: waiting up to ${waitMs}ms for a language-server squiggle on line ${line + 1} (local only, no API call)`
-      );
-      const { found, elapsed } = await this.waitForDiagnostic(doc.uri, line, waitMs);
-      this.logDiagnosticGate(doc.uri, line, found, elapsed, false);
-      if (!found) {
-        return;
+    // Diagnostics gate: local LSP only — never calls the LLM until passed.
+    const manual = force;
+    if (!(await shouldFixLine(doc.uri, line, manual, this.output))) {
+      if (manual && cfg().fixRequireDiagnostic) {
+        vscode.window.setStatusBarMessage(
+          "Autocorrect: no LSP error on line — skipped (fix.requireDiagnostic)",
+          4000
+        );
       }
-    } else if (force) {
-      this.logDiagnosticGate(doc.uri, line, true, 0, true);
+      return;
     }
 
     const contextStart = Math.max(0, line - CONTEXT_LINES);
@@ -306,14 +267,13 @@ export class LineCorrector implements vscode.Disposable {
           system:
             `You are a strict single-line code autocorrector for ${profile.name}. ` +
             `The user shows you surrounding context and one TARGET line. ` +
-            `If the TARGET line contains a typo or syntax error, reply with ONLY the corrected line, ` +
-            `preserving its original leading indentation. ` +
+            `If the TARGET line contains a typo or syntax error, reply with the corrected line(s), ` +
+            `preserving leading indentation on the first line. ` +
+            `You may add lines after the target when required to fix syntax (e.g. a missing closing bracket). ` +
             `If the line is already correct, reply with exactly: UNCHANGED\n` +
-            `Never reply with more than one line. Never add explanations, quotes, or code fences. ` +
+            `Never add explanations, quotes, or code fences. ` +
             `Never rewrite working code stylistically — fix mistakes only.`,
-          user:
-            `Context (lines above the target):\n${context || "(start of file)"}\n\n` +
-            `TARGET line:\n${original}`,
+          user: lineFixUserMessage(context, original),
           maxTokens: 300,
           signal: abort.signal,
         })
@@ -332,19 +292,20 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
 
-    // Strict parse: single line, meaningfully different, or bail.
-    let corrected = stripFences(response).replace(/\r?\n$/, "");
-    if (corrected.trim() === "UNCHANGED" || corrected.includes("\n")) {
-      this.log(`line ${line + 1}: model returned UNCHANGED or multi-line response`);
+    // Parse model output; accept multi-line fixes for a single-line target.
+    const raw = normalizeModelText(response);
+    if (isUnchanged(raw)) {
+      this.log(`line ${line + 1}: model returned UNCHANGED`);
       return;
     }
-    corrected = corrected.replace(/\r/g, "");
-    if (corrected.trim().length === 0 || corrected === original) {
+    const corrected = fixForSingleLineTarget(modelLines(response));
+    if (!corrected || corrected === original) {
       this.log(`line ${line + 1}: no meaningful change`);
       return;
     }
-    // Whitespace-only diffs are more likely model noise than a fix; skip them.
-    if (corrected.trim() === original.trim()) {
+    // Whitespace-only diffs on the first line are more likely model noise than a fix.
+    const firstLine = corrected.split("\n")[0];
+    if (firstLine.trim() === original.trim() && !corrected.includes("\n")) {
       this.log(`line ${line + 1}: whitespace-only diff`);
       return;
     }
@@ -358,9 +319,8 @@ export class LineCorrector implements vscode.Disposable {
     }
 
     // Queued mode: stage automatic fixes for later review instead of applying on Enter.
-    // Manual correction (force) still applies immediately — the user explicitly asked.
-    if (!force && cfg().queueEnabled) {
-      this.queue.add(doc, line, original, corrected);
+    if (queue || (!force && cfg().queueEnabled)) {
+      this.queue.addLine(doc, line, original, corrected);
       return;
     }
 
@@ -368,43 +328,27 @@ export class LineCorrector implements vscode.Disposable {
     edit.replace(doc.uri, new vscode.Range(line, 0, line, original.length), corrected);
     const applied = await vscode.workspace.applyEdit(edit);
     if (applied) {
-      this.output.appendLine(`[line] ${doc.fileName}:${line + 1}  "${original.trim()}" -> "${corrected.trim()}"`);
-      this.flash(doc, line);
+      const extra = corrected.split("\n").length - 1;
+      this.output.appendLine(
+        `[line] ${doc.fileName}:${line + 1}  "${original.trim()}" -> "${firstLine.trim()}"` +
+          (extra > 0 ? ` (+${extra} line(s))` : "")
+      );
+      this.flash(doc, line, extra);
     }
-  }
-
-  private hasDiagnostic(uri: vscode.Uri, line: number): boolean {
-    return vscode.languages.getDiagnostics(uri).some(
-      (d) =>
-        d.severity <= vscode.DiagnosticSeverity.Warning &&
-        d.range.start.line <= line &&
-        line <= d.range.end.line
-    );
-  }
-
-  private async waitForDiagnostic(
-    uri: vscode.Uri, line: number, maxWaitMs: number
-  ): Promise<{ found: boolean; elapsed: number }> {
-    const start = Date.now();
-    const deadline = start + maxWaitMs;
-    while (Date.now() < deadline) {
-      if (this.hasDiagnostic(uri, line)) {
-        return { found: true, elapsed: Date.now() - start };
-      }
-      await sleep(200);
-    }
-    return { found: this.hasDiagnostic(uri, line), elapsed: Date.now() - start };
   }
 
   /** Subtle 2-second highlight so the user notices the change happened. */
-  private flash(doc: vscode.TextDocument, line: number): void {
+  private flash(doc: vscode.TextDocument, line: number, extraLines = 0): void {
     const editor = vscode.window.visibleTextEditors.find(
       (ed) => ed.document.uri.toString() === doc.uri.toString()
     );
     if (!editor) {
       return;
     }
-    editor.setDecorations(this.highlight, [new vscode.Range(line, 0, line, 0)]);
+    const endLine = line + extraLines;
+    editor.setDecorations(this.highlight, [
+      new vscode.Range(line, 0, endLine, doc.lineAt(endLine).text.length),
+    ]);
     setTimeout(() => {
       if (!editor.document.isClosed) {
         editor.setDecorations(this.highlight, []);

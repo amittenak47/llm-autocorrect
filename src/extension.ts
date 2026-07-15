@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import { BlockCapture } from "./blockCapture";
-import { Commenter } from "./commenter";
+import { blockLineRange } from "./blockApply";
 import { showCommandMenu } from "./commandMenu";
 import { cfg, setEnabled, setQueueEnabled } from "./config";
+import { Commenter } from "./commenter";
 import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { LineCorrector } from "./lineCorrector";
@@ -10,6 +11,7 @@ import { LlmClient, secretKeyFor } from "./llm";
 import { clearAllModes } from "./modeContext";
 import { ModeController } from "./modeController";
 import { PasteTranslator } from "./pasteTranslator";
+import { StagedExecutor } from "./stagedExecutor";
 import { StatusBar } from "./statusBar";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -20,9 +22,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const fixQueue = new FixQueue(statusBar, output);
   const lineCorrector = new LineCorrector(llm, statusBar, fixQueue, output);
   const pasteTranslator = new PasteTranslator(llm, statusBar, output);
-  const blockCapture = new BlockCapture(llm, statusBar, flash, output);
-  const commenter = new Commenter(llm, blockCapture, statusBar, flash, output);
-  const modeController = new ModeController(blockCapture, output);
+  const blockCapture = new BlockCapture(output);
+  const stagedExecutor = new StagedExecutor(llm, fixQueue, statusBar, flash, output);
+  const commenter = new Commenter(stagedExecutor, blockCapture);
+  const modeController = new ModeController(
+    blockCapture,
+    stagedExecutor,
+    lineCorrector,
+    fixQueue,
+    output
+  );
 
   await clearAllModes();
   output.appendLine("[mode] extension activated");
@@ -66,10 +75,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       if (key === "") {
         await context.secrets.delete(secretKeyFor(provider));
-        void vscode.window.showInformationMessage(`Autocorrect: cleared API key for ${provider}.`);
+        vscode.window.setStatusBarMessage(`Autocorrect: cleared API key for ${provider}`, 3000);
       } else {
         await context.secrets.store(secretKeyFor(provider), key);
-        void vscode.window.showInformationMessage(`Autocorrect: API key for ${provider} saved.`);
+        vscode.window.setStatusBarMessage(`Autocorrect: API key saved for ${provider}`, 3000);
       }
     }),
 
@@ -78,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
 
     vscode.commands.registerCommand("autocorrect.correctSelection", () =>
-      lineCorrector.correctSelection()
+      lineCorrector.correctLineNearCursor(false)
     ),
 
     vscode.commands.registerCommand("autocorrect.showMenu", () => showCommandMenu()),
@@ -87,16 +96,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       modeController.enterMenuMode()
     ),
     vscode.commands.registerCommand("autocorrect.exitMenuMode", () =>
-      modeController.exitMenuMode()
+      modeController.exitMenuMode(true)
     ),
 
-    // Dedicated commands — keybinding args are unreliable across hosts.
     vscode.commands.registerCommand("autocorrect.menuKeyA", () => modeController.menuPick("a")),
+    vscode.commands.registerCommand("autocorrect.menuKeyShiftA", () =>
+      modeController.menuStageBlock()
+    ),
     vscode.commands.registerCommand("autocorrect.menuKeyS", () => modeController.menuPick("s")),
-    vscode.commands.registerCommand("autocorrect.menuKeyD", () => modeController.menuPick("d")),
-    vscode.commands.registerCommand("autocorrect.menuKeyF", () => modeController.menuPick("f")),
     vscode.commands.registerCommand("autocorrect.menuKeyQ", () => modeController.menuPick("q")),
-    vscode.commands.registerCommand("autocorrect.menuKeyL", () => modeController.menuPick("l")),
+    vscode.commands.registerCommand("autocorrect.menuKeyC", () => modeController.menuPick("c")),
+    vscode.commands.registerCommand("autocorrect.menuKeyShiftC", () =>
+      modeController.menuStageLine()
+    ),
+
+    vscode.commands.registerCommand("autocorrect.stagedSetDocs", () =>
+      modeController.stagedSetDocs()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedSetCaveman", () =>
+      modeController.stagedSetCaveman()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedSetContext", () =>
+      modeController.stagedSetContext()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedSubmit", () =>
+      modeController.stagedSubmit(false)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedSubmitQueue", () =>
+      modeController.stagedSubmit(true)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedCancel", () =>
+      modeController.stagedCancel()
+    ),
 
     vscode.commands.registerCommand("autocorrect.captureMoveUp", () =>
       modeController.captureMove("up")
@@ -110,49 +141,56 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("autocorrect.captureMoveLineEnd", () =>
       modeController.captureMove("lineEnd")
     ),
-    vscode.commands.registerCommand("autocorrect.captureEnd", () => modeController.captureEnd()),
+    vscode.commands.registerCommand("autocorrect.captureFinish", () =>
+      modeController.captureFinish()
+    ),
     vscode.commands.registerCommand("autocorrect.captureCancel", () =>
       modeController.captureCancel()
     ),
 
-    vscode.commands.registerCommand("autocorrect.correctBlock", () =>
-      blockCapture.correctBlock()
-    ),
-    vscode.commands.registerCommand("autocorrect.startBlockCapture", () =>
-      blockCapture.startCapture()
-    ),
-    vscode.commands.registerCommand("autocorrect.endBlockCapture", async () => {
-      await blockCapture.endCapture();
-      await modeController.exitCaptureAdjustMode();
+    vscode.commands.registerCommand("autocorrect.correctBlock", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
+        return;
+      }
+      const staged = blockCapture.getStagedRange(editor);
+      const range =
+        staged ??
+        (editor.selection.isEmpty
+          ? undefined
+          : blockLineRange(editor.document, editor.selection.start.line, editor.selection.end.line));
+      if (!range) {
+        vscode.window.setStatusBarMessage("Autocorrect: select a block first", 3000);
+        return;
+      }
+      const result = await stagedExecutor.run(
+        editor,
+        range,
+        { op: "fix", contextNote: "" },
+        false
+      );
+      if (result.ok) {
+        blockCapture.clearStaged();
+      }
     }),
-    vscode.commands.registerCommand("autocorrect.cancelBlockCapture", () => {
-      blockCapture.cancelCapture();
-      void modeController.exitCaptureAdjustMode();
-    }),
-
     vscode.commands.registerCommand("autocorrect.documentBlock", () =>
-      commenter.documentBlock()
+      commenter.documentBlock(false)
     ),
     vscode.commands.registerCommand("autocorrect.cavemanComment", () =>
-      commenter.cavemanComment()
+      commenter.cavemanComment(false)
     ),
 
-    vscode.commands.registerCommand("autocorrect.reviewQueuedFixes", () =>
-      fixQueue.review()
-    ),
-    vscode.commands.registerCommand("autocorrect.applyQueuedFixes", () =>
-      fixQueue.applyAll()
-    ),
-    vscode.commands.registerCommand("autocorrect.clearQueuedFixes", () =>
-      fixQueue.clear()
-    ),
+    vscode.commands.registerCommand("autocorrect.reviewQueuedFixes", () => fixQueue.review()),
+    vscode.commands.registerCommand("autocorrect.applyQueuedFixes", () => fixQueue.applyAll()),
+    vscode.commands.registerCommand("autocorrect.clearQueuedFixes", () => fixQueue.clear()),
     vscode.commands.registerCommand("autocorrect.toggleQueueMode", async () => {
       const next = !cfg().queueEnabled;
       await setQueueEnabled(next);
       vscode.window.setStatusBarMessage(
         next
-          ? "Autocorrect: queued mode ON — Enter fixes are staged for review"
-          : "Autocorrect: queued mode OFF — fixes apply immediately",
+          ? "Autocorrect: Enter-fixes queue ON"
+          : "Autocorrect: Enter-fixes queue OFF",
         4000
       );
     })

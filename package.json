@@ -27,36 +27,8 @@
         "title": "Autocorrect: Set API Key"
       },
       {
-        "command": "autocorrect.translateSelection",
-        "title": "Autocorrect: Translate Selection to Current File's Language"
-      },
-      {
-        "command": "autocorrect.correctSelection",
-        "title": "Autocorrect: Correct Selected Line"
-      },
-      {
-        "command": "autocorrect.correctBlock",
-        "title": "Autocorrect: Correct Selected Block"
-      },
-      {
-        "command": "autocorrect.startBlockCapture",
-        "title": "Autocorrect: Start Block Capture"
-      },
-      {
-        "command": "autocorrect.endBlockCapture",
-        "title": "Autocorrect: End Block Capture & Correct"
-      },
-      {
-        "command": "autocorrect.cancelBlockCapture",
-        "title": "Autocorrect: Cancel Block Capture"
-      },
-      {
-        "command": "autocorrect.documentBlock",
-        "title": "Autocorrect: Document Selection / Previous Line (Docstrings & Comments)"
-      },
-      {
-        "command": "autocorrect.cavemanComment",
-        "title": "Autocorrect: Caveman Comments (Ultra-Short Inline)"
+        "command": "autocorrect.enterMenuMode",
+        "title": "Autocorrect: Enter Menu Mode"
       },
       {
         "command": "autocorrect.reviewQueuedFixes",
@@ -72,15 +44,31 @@
       },
       {
         "command": "autocorrect.toggleQueueMode",
-        "title": "Autocorrect: Toggle Queued Fix Mode"
+        "title": "Autocorrect: Toggle Enter-Fix Queue Mode"
+      },
+      {
+        "command": "autocorrect.correctSelection",
+        "title": "Autocorrect: Correct Line Near Cursor"
+      },
+      {
+        "command": "autocorrect.correctBlock",
+        "title": "Autocorrect: Correct Selected Block"
+      },
+      {
+        "command": "autocorrect.documentBlock",
+        "title": "Autocorrect: Add Docstrings / Comments"
+      },
+      {
+        "command": "autocorrect.cavemanComment",
+        "title": "Autocorrect: Caveman Comments"
+      },
+      {
+        "command": "autocorrect.translateSelection",
+        "title": "Autocorrect: Translate Selection"
       },
       {
         "command": "autocorrect.showMenu",
         "title": "Autocorrect: Command Menu (QuickPick)"
-      },
-      {
-        "command": "autocorrect.enterMenuMode",
-        "title": "Autocorrect: Enter Menu Mode"
       },
       {
         "command": "autocorrect.exitMenuMode",
@@ -91,24 +79,48 @@
         "title": "Autocorrect: Menu — Block (internal)"
       },
       {
+        "command": "autocorrect.menuKeyShiftA",
+        "title": "Autocorrect: Menu — Stage Block (internal)"
+      },
+      {
         "command": "autocorrect.menuKeyS",
         "title": "Autocorrect: Menu — Capture (internal)"
       },
       {
-        "command": "autocorrect.menuKeyD",
-        "title": "Autocorrect: Menu — Doc (internal)"
-      },
-      {
-        "command": "autocorrect.menuKeyF",
-        "title": "Autocorrect: Menu — Caveman (internal)"
-      },
-      {
         "command": "autocorrect.menuKeyQ",
-        "title": "Autocorrect: Menu — Queue (internal)"
+        "title": "Autocorrect: Menu — Review Queue (internal)"
       },
       {
-        "command": "autocorrect.menuKeyL",
+        "command": "autocorrect.menuKeyC",
         "title": "Autocorrect: Menu — Line (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftC",
+        "title": "Autocorrect: Menu — Stage Line (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSetDocs",
+        "title": "Autocorrect: Staged — Docs flag (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSetCaveman",
+        "title": "Autocorrect: Staged — Caveman flag (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSetContext",
+        "title": "Autocorrect: Staged — Context note (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSubmit",
+        "title": "Autocorrect: Staged — Send now (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSubmitQueue",
+        "title": "Autocorrect: Staged — Enqueue (internal)"
+      },
+      {
+        "command": "autocorrect.stagedCancel",
+        "title": "Autocorrect: Staged — Cancel (internal)"
       },
       {
         "command": "autocorrect.captureMoveUp",
@@ -127,14 +139,37 @@
         "title": "Autocorrect: Capture Line End (internal)"
       },
       {
-        "command": "autocorrect.captureEnd",
-        "title": "Autocorrect: Capture End & Correct"
+        "command": "autocorrect.captureFinish",
+        "title": "Autocorrect: Finish Capture (internal)"
       },
       {
         "command": "autocorrect.captureCancel",
-        "title": "Autocorrect: Cancel Capture Adjust"
+        "title": "Autocorrect: Cancel Capture (internal)"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        { "command": "autocorrect.exitMenuMode", "when": "false" },
+        { "command": "autocorrect.menuKeyA", "when": "false" },
+        { "command": "autocorrect.menuKeyShiftA", "when": "false" },
+        { "command": "autocorrect.menuKeyS", "when": "false" },
+        { "command": "autocorrect.menuKeyQ", "when": "false" },
+        { "command": "autocorrect.menuKeyC", "when": "false" },
+        { "command": "autocorrect.menuKeyShiftC", "when": "false" },
+        { "command": "autocorrect.stagedSetDocs", "when": "false" },
+        { "command": "autocorrect.stagedSetCaveman", "when": "false" },
+        { "command": "autocorrect.stagedSetContext", "when": "false" },
+        { "command": "autocorrect.stagedSubmit", "when": "false" },
+        { "command": "autocorrect.stagedSubmitQueue", "when": "false" },
+        { "command": "autocorrect.stagedCancel", "when": "false" },
+        { "command": "autocorrect.captureMoveUp", "when": "false" },
+        { "command": "autocorrect.captureMoveDown", "when": "false" },
+        { "command": "autocorrect.captureMoveLineStart", "when": "false" },
+        { "command": "autocorrect.captureMoveLineEnd", "when": "false" },
+        { "command": "autocorrect.captureFinish", "when": "false" },
+        { "command": "autocorrect.captureCancel", "when": "false" }
+      ]
+    },
     "keybindings": [
       {
         "command": "autocorrect.enterMenuMode",
@@ -151,37 +186,77 @@
       {
         "command": "autocorrect.exitMenuMode",
         "key": "escape",
-        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.captureAdjustMode != true"
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.stagedCancel",
+        "key": "escape",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
       },
       {
         "command": "autocorrect.menuKeyA",
         "key": "a",
-        "when": "editorTextFocus && autocorrect.menuMode == true"
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftA",
+        "key": "shift+a",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
       },
       {
         "command": "autocorrect.menuKeyS",
         "key": "s",
-        "when": "editorTextFocus && autocorrect.menuMode == true"
-      },
-      {
-        "command": "autocorrect.menuKeyD",
-        "key": "d",
-        "when": "editorTextFocus && autocorrect.menuMode == true"
-      },
-      {
-        "command": "autocorrect.menuKeyF",
-        "key": "f",
-        "when": "editorTextFocus && autocorrect.menuMode == true"
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
       },
       {
         "command": "autocorrect.menuKeyQ",
         "key": "q",
-        "when": "editorTextFocus && autocorrect.menuMode == true"
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
       },
       {
-        "command": "autocorrect.menuKeyL",
-        "key": "l",
-        "when": "editorTextFocus && autocorrect.menuMode == true"
+        "command": "autocorrect.menuKeyC",
+        "key": "c",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftC",
+        "key": "shift+c",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.stagedSetDocs",
+        "key": "d",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSetCaveman",
+        "key": "f",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSetContext",
+        "key": "x",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSubmit",
+        "key": "e",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSubmitQueue",
+        "key": "shift+e",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyA",
+        "key": "a",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyC",
+        "key": "c",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
       },
       {
         "command": "autocorrect.captureMoveUp",
@@ -204,13 +279,8 @@
         "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
       },
       {
-        "command": "autocorrect.captureEnd",
+        "command": "autocorrect.captureFinish",
         "key": "e",
-        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
-      },
-      {
-        "command": "autocorrect.captureEnd",
-        "key": "enter",
         "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
       },
       {
@@ -271,7 +341,17 @@
         "autocorrect.line.requireDiagnostic": {
           "type": "boolean",
           "default": true,
-          "description": "Only call the LLM when the language server reports an error/warning on the line (strongly recommended — kills most API calls and false corrections)."
+          "description": "Enter-triggered line fixes only: when true, call the LLM only if the language server reports an error or warning on the line you just left. Set to false to autocorrect on Enter even without a squiggle."
+        },
+        "autocorrect.fix.requireDiagnostic": {
+          "type": "boolean",
+          "default": false,
+          "description": "Manual fixes (menu A/C, staged E/Shift+E, palette commands): when true, only run if the target line or block has an LSP error or warning. Default false — send anytime."
+        },
+        "autocorrect.prompt.prefix": {
+          "type": "string",
+          "default": "",
+          "description": "Text prepended to every LLM user prompt as context (project conventions, file role, etc.). Combined with per-request X notes in staged mode."
         },
         "autocorrect.line.debounceMs": {
           "type": "number",
@@ -292,11 +372,6 @@
           "type": "number",
           "default": 5000,
           "description": "Abort LLM requests that take longer than this."
-        },
-        "autocorrect.block.confirmBeforeSend": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show a confirmation (with line count and token estimate) before a captured block is sent to the LLM."
         },
         "autocorrect.queue.enabled": {
           "type": "boolean",

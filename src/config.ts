@@ -11,11 +11,12 @@ export function cfg() {
     baseUrl: c.get<string>("baseUrl", ""),
     languages: c.get<string[]>("languages", ["python"]),
     requireDiagnostic: c.get<boolean>("line.requireDiagnostic", true),
+    fixRequireDiagnostic: c.get<boolean>("fix.requireDiagnostic", false),
     debounceMs: c.get<number>("line.debounceMs", 800),
     diagnosticWaitMs: c.get<number>("line.diagnosticWaitMs", 1500),
+    promptPrefix: c.get<string>("prompt.prefix", ""),
     debug: c.get<boolean>("debug", false),
     timeoutMs: c.get<number>("timeoutMs", 5000),
-    blockConfirm: c.get<boolean>("block.confirmBeforeSend", true),
     queueEnabled: c.get<boolean>("queue.enabled", false),
   };
 }

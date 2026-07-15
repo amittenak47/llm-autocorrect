@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
+import { withUserContext } from "./promptContext";
 import { PROFILES, detectLanguage, LanguageProfile } from "./languages";
 import { LlmClient, stripFences } from "./llm";
 import { StatusBar } from "./statusBar";
@@ -126,7 +127,7 @@ export class PasteTranslator implements vscode.Disposable {
             `Convert the given ${sourceName} code to idiomatic ${target.name}. ` +
             `Preserve behavior, names, and comments. ` +
             `Reply with ONLY the translated ${target.name} code — no code fences, no explanations.`,
-          user: sourceText,
+          user: withUserContext(`Code to translate:\n${sourceText}`),
           maxTokens: 2048,
           signal: new AbortController().signal,
         })

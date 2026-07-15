@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
 import { capMaxTokens } from "./promptLimits";
+import { stripFences } from "./textUtils";
+
+export { stripFences } from "./textUtils";
 
 export interface LlmRequest {
   system: string;
@@ -141,14 +144,4 @@ export class LlmClient {
       .map((b: any) => b.text)
       .join("");
   }
-}
-
-/** Strip markdown code fences a model may wrap its answer in, despite instructions. */
-export function stripFences(text: string): string {
-  let t = text.trim();
-  const fence = t.match(/^```[\w+-]*\r?\n([\s\S]*?)\r?\n?```$/);
-  if (fence) {
-    t = fence[1];
-  }
-  return t;
 }
