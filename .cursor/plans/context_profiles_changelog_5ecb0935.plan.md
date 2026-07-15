@@ -4,37 +4,37 @@ overview: Ship a user-facing changelog and quick fixes (queue highlighting, loca
 todos:
   - id: changelog-v020
     content: Write CHANGELOG.md (0.2.0), bump version, update README key map + local timeout docs
-    status: in_progress
+    status: completed
   - id: fix-queue-deco
     content: Fix multi-line queue amber highlight (per-line ranges + gutter bar) in fixQueue.ts
-    status: pending
+    status: completed
   - id: local-timeout
     content: Auto 60s timeout for localhost openai-compatible profiles in config/llmRouter
-    status: pending
+    status: completed
   - id: context-settings
     content: Expose contextLines, maxLineChars, tokenBudget, ringEnabled, defaultTiers in settings
-    status: pending
+    status: completed
   - id: context-assembler
     content: Implement contextAssembler.ts + editRing.ts with P0-P5 priority and compression
-    status: pending
+    status: completed
   - id: staged-tier-keys
     content: Add StagedSession context tiers + number keys 1-5 in staged mode + token estimate in status bar
-    status: pending
+    status: completed
   - id: multi-profile
     content: Profiles array, llmRouter, M/Shift+M profile selection, per-profile queue storage
-    status: pending
+    status: completed
   - id: queue-review-both
     content: Q = active profile queue, Shift+Q = all profiles grouped review
-    status: pending
+    status: completed
   - id: stage-decorations
     content: "stageDecorations.ts: profile border colors, op/tier gutter marks on staged/queued lines"
-    status: pending
+    status: completed
   - id: wire-executors
     content: Integrate assembler + router into lineCorrector and stagedExecutor
-    status: pending
+    status: completed
   - id: tests
     content: Unit tests for contextAssembler, editRing, queue decoration ranges
-    status: pending
+    status: completed
 isProject: false
 ---
 

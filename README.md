@@ -30,7 +30,7 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Immediate fix** | **A** (block) or **C** (line) — send to LLM immediately, no staging. |
 | **Stage Workflow** | **Shift+A** (block) or **Shift+C** (line) → green highlight → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Window** | **S** → W/S (up/down) A/D (start/end) controls to select a block → **E** closes selection window and enters staged mode → set modifiers → **E** send now or **Shift+E** enqueue. |
-| **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** docs · **F** caveman · **X** custom prompt · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
+| **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
 | **Stage Context** | **1** lines above/below the target · **2** enclosing `def` / `class` / `function` header · **3** recent edit hunks in this file · **4** imports + signatures from other open editor tabs · **5** last large copy/selection snippet. Tiers **3**–**5** require `context.ringEnabled`. |
 | **Multi-profile LLM** | Groq, Gemini, Anthropic, local llama-server side by side. Choose profile with **M** / **Shift+M** during the modifier step (before **E** / **Shift+E**); that profile owns the request and its queue slot. |
 | **Queued staged requests** | **Q** reviews the queue for the **currently selected profile** only; **Shift+Q** reviews **all profiles** (when you sent to different LLMs). Amber highlight on every queued line. |
@@ -93,7 +93,7 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 
 | Key | Modifier |
 | --- | --- |
-| **D** | Modifier: **docs** (docstrings / comment blocks) |
+| **D** | Modifier: **documentation** (docstrings / comment blocks) |
 | **F** | Modifier: **caveman** (short inline comments) |
 | *(none)* | Modifier: **best-guess fix** (default) |
 | **X** | Modifier: custom prompt note (per request; saved with queued items) |
@@ -132,7 +132,7 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | Green dashed lines | Staged block |
 | Colored left border | Active LLM profile |
 | **1–5** in gutter (staged line) | Context tiers enabled |
-| Op dot (fix / docs / caveman) | Current modifier (best-guess fix / docs / caveman) |
+| Op dot (fix / documentation / caveman) | Current modifier (best-guess fix / documentation / caveman) |
 | Amber lines (each line in range) | Queued fix pending review |
 
 Status bar shows modifiers and token estimate, e.g. `fix · @Groq free · ctx:12 · ~840tok`.
@@ -221,7 +221,7 @@ Set these in **staged mode** (green highlight) **before** **E** or **Shift+E** (
 | Key | Modifier |
 | --- | --- |
 | *(default)* | **best-guess fix** |
-| **D** | **docs** — tutorial 7 |
+| **D** | **documentation** — tutorial 7 |
 | **F** | **caveman** — tutorial 8 |
 | **X** | Custom prompt (per request) — tutorial 9 |
 | **1**–**5** | Context tiers — tutorial 10 |
@@ -232,7 +232,7 @@ Set these in **staged mode** (green highlight) **before** **E** or **Shift+E** (
 **When:** Add documentation without changing code lines.
 
 1. Stage a block (tutorials 4–6).
-2. **D** — modifier switches to **docs**.
+2. **D** — modifier switches to **documentation**.
 3. Optional: **X** (tutorial 9); **1**/**2** (tutorial 10).
 4. **E** (tutorial 12) or **Shift+E** (tutorial 13).
 
@@ -593,7 +593,7 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | **Staged send skipped** | Deliberate gate: `fix.requireDiagnostic: true` requires an LSP squiggle on the block. Default **false** — sends anytime. |
 | **`buffer changed — skipped`** | File was edited while the LLM was running. Re-stage and send again. |
 | **`select a block for A`** | **A** needs a non-empty selection. Use **Shift+A** to stage without immediate send, or **S** Staged Window. |
-| **Docs / caveman odd or skipped** | **D** (docs) rejects output that alters code lines or invents new classes. **F** (caveman) rejects if line count changes. These modifiers and their validation are **still being refined** for accuracy — expect occasional skips or imperfect comments until prompts and checks improve. Use **X** for tighter instructions; try a different profile or smaller block. |
+| **Docs / caveman odd or skipped** | **D** (documentation) rejects output that alters code lines or invents new classes. **F** (caveman) rejects if line count changes. These modifiers and their validation are **still being refined** for accuracy — expect occasional skips or imperfect comments until prompts and checks improve. Use **X** for tighter instructions; try a different profile or smaller block. |
 
 ### Queue, profiles, and API
 
