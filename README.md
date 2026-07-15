@@ -83,36 +83,48 @@ Set the provider in settings: `autocorrect.provider`.
 
 ## Commands
 
-**Fastest path:** **`Ctrl+Shift+A`** (**`Cmd+Shift+A`** on macOS) → **Autocorrect: Command Menu** — a filterable picker with slash-style names (`/block`, `/caveman`, `/queue`, …). Same idea as typing `/commands` in chat, but nothing is written into your file.
+### Modal menu (recommended)
 
-You can also use the **Command Palette** (`Ctrl+Shift+P`) and type `Autocorrect:`.
+**Double-tap `Ctrl`** (`Cmd` on macOS) in the editor → **menu mode** (status bar shows options). Press one key:
 
-| Command | Menu alias | What it does |
-| --- | --- | --- |
-| `Autocorrect: Command Menu` | — | Open the slash-style command picker (`Ctrl+Shift+A`) |
-| `Autocorrect: Toggle On/Off` | — | Turn the extension on or off (or click the status bar item) |
-| `Autocorrect: Set API Key` | — | Save or clear your provider API key |
-| `Autocorrect: Correct Selected Line` | `/line` | Fix one selected line immediately (no Enter needed) |
-| `Autocorrect: Translate Selection` | `/translate` | Convert a selection to the file's language |
-| `Autocorrect: Correct Selected Block` | `/block` | Fix the selected multi-line block (reverse capture) |
-| `Autocorrect: Start Block Capture` | `/capture` | Drop a start mark and highlight everything you type from here |
-| `Autocorrect: End Block Capture & Correct` | `/capture-end` | Send the captured block for correction |
-| `Autocorrect: Cancel Block Capture` | `/capture-cancel` | Abandon the capture without sending |
-| `Autocorrect: Document Selection / Previous Line` | `/doc` | Docstrings/comments for selection, capture, or previous line |
-| `Autocorrect: Caveman Comments` | `/caveman` | Ultra-short inline comments (`# get user`) |
-| `Autocorrect: Review Queued Fixes` | `/queue` | Review queue: checked = apply, unchecked = discard |
-| `Autocorrect: Apply All Queued Fixes` | `/queue-apply` | Apply everything in the queue |
-| `Autocorrect: Clear Queued Fixes` | `/queue-clear` | Empty the queue without applying |
-| `Autocorrect: Toggle Queued Fix Mode` | `/queue-toggle` | Switch between apply-on-Enter and queue-for-review |
+| Key | Action |
+| --- | --- |
+| `A` | Correct selected block |
+| `S` | Keyboard block capture → **WASD adjust mode** (below) |
+| `D` | Docstrings & comments |
+| `F` | Caveman inline comments |
+| `Q` | Review queued fixes |
+| `L` | Correct selected line |
+| `Esc` | Exit menu |
 
-Rebind **`autocorrect.showMenu`** in Keyboard Shortcuts if `Ctrl+Shift+A` conflicts with something else.
+**Fallback:** `Ctrl+Shift+;` (`Cmd+Shift+;` on macOS). **Always works:** Command Palette → **`Autocorrect: Enter Menu Mode`**.
+
+Check **View → Output → LLM Autocorrect** for `[mode] menu mode ON` after entering menu mode.
+
+### Capture adjust mode (after `S` in menu)
+
+Green highlight marks the block. **WASD** moves the far end of the range (no arrow keys needed):
+
+| Key | Action |
+| --- | --- |
+| `W` / `S` | Move block end up / down one line |
+| `A` / `D` | Move block end to start / end of line |
+| `E` or `Enter` | Send block to LLM |
+| `Esc` | Cancel |
+
+You can still **type** to grow a capture the old way: Command Palette → **Start Block Capture**, type, **End Block Capture**.
+
+### Command Palette / QuickPick
+
+`Ctrl+Shift+P` → `Autocorrect: …` for every command. **Autocorrect: Command Menu (QuickPick)** is a searchable `/block`-style list if you prefer a picker over modal keys.
 
 ## Block capture
 
 Two ways to define exactly what gets sent to the LLM before any request goes out — no popup window, the block lives in your editor:
 
-- **Reverse** — select the code, run **`/block`** (or `Autocorrect: Correct Selected Block`). The native selection is the block.
-- **Advance** — run **`/capture`**, type; a faint green dashed highlight tracks the block from the start mark to your cursor. Run **`/capture-end`** to send it (or **`/capture-cancel`** to cancel).
+- **Reverse** — select the code, menu **`A`** (or `Autocorrect: Correct Selected Block`). The native selection is the block.
+- **Advance (type)** — Command Palette → **Start Block Capture**, type; green highlight tracks the block. **End Block Capture** to send.
+- **Advance (WASD)** — menu **`S`**, then WASD to size the block, **`E`** to send.
 
 Before anything is sent you get a confirmation with the line count and a token estimate (disable with `autocorrect.block.confirmBeforeSend: false`). Whole lines are sent — what you saw highlighted is what goes out.
 
@@ -120,15 +132,15 @@ Before anything is sent you get a confirmation with the line count and a token e
 
 Both commands target, in priority order: your **selection**, else the **block being captured**, else the **previous non-blank line** above the cursor.
 
-- **Document** (`/doc`) — proper docstrings for functions/classes plus brief comments; the code itself is never changed.
-- **Caveman** (`/caveman`) — ultra-short inline comments appended to lines that do real work (`# get user`, `// loop nums`). If the model changes the line structure, nothing is applied.
+- **Document** (menu **`D`**) — proper docstrings for functions/classes plus brief comments; the code itself is never changed.
+- **Caveman** (menu **`F`**) — ultra-short inline comments appended to lines that do real work (`# get user`, `// loop nums`). If the model changes the line structure, nothing is applied.
 
 ## Queued fixes
 
 Set `autocorrect.queue.enabled: true` (or run `Autocorrect: Toggle Queued Fix Mode`) and Enter-fixes are **staged instead of applied**: the line gets a faint amber highlight, the status bar shows `(N queued)`, and nothing changes until you say so.
 
-- **`/queue`** opens the review list — check the fixes you want, uncheck to discard, Esc keeps the queue untouched.
-- **`/queue-apply`** applies everything.
+- Menu **`Q`** or **Review Queued Fixes** opens the review list — check to apply, uncheck to discard, Esc keeps the queue.
+- **Apply All Queued Fixes** applies everything.
 - Queued line numbers follow your edits; if you rewrite a queued line yourself, its stale fix is dropped automatically. Manual `Correct Selected Line` still applies immediately.
 
 ## Settings

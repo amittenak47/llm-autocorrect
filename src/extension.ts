@@ -1,16 +1,18 @@
 import * as vscode from "vscode";
 import { BlockCapture } from "./blockCapture";
 import { Commenter } from "./commenter";
+import { showCommandMenu } from "./commandMenu";
 import { cfg, setEnabled, setQueueEnabled } from "./config";
 import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { LineCorrector } from "./lineCorrector";
 import { LlmClient, secretKeyFor } from "./llm";
-import { showCommandMenu } from "./commandMenu";
+import { clearAllModes } from "./modeContext";
+import { ModeController } from "./modeController";
 import { PasteTranslator } from "./pasteTranslator";
 import { StatusBar } from "./statusBar";
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("LLM Autocorrect");
   const statusBar = new StatusBar();
   const flash = new Flash();
@@ -20,6 +22,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const pasteTranslator = new PasteTranslator(llm, statusBar, output);
   const blockCapture = new BlockCapture(llm, statusBar, flash, output);
   const commenter = new Commenter(llm, blockCapture, statusBar, flash, output);
+  const modeController = new ModeController(blockCapture, output);
+
+  await clearAllModes();
+  output.appendLine("[mode] extension activated");
 
   context.subscriptions.push(
     output,
@@ -29,6 +35,7 @@ export function activate(context: vscode.ExtensionContext): void {
     lineCorrector,
     pasteTranslator,
     blockCapture,
+    modeController,
 
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("autocorrect")) {
@@ -76,21 +83,53 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand("autocorrect.showMenu", () => showCommandMenu()),
 
-    // Block capture (reverse: selection is the block; advance: start/end recording).
+    vscode.commands.registerCommand("autocorrect.enterMenuMode", () =>
+      modeController.enterMenuMode()
+    ),
+    vscode.commands.registerCommand("autocorrect.exitMenuMode", () =>
+      modeController.exitMenuMode()
+    ),
+
+    // Dedicated commands — keybinding args are unreliable across hosts.
+    vscode.commands.registerCommand("autocorrect.menuKeyA", () => modeController.menuPick("a")),
+    vscode.commands.registerCommand("autocorrect.menuKeyS", () => modeController.menuPick("s")),
+    vscode.commands.registerCommand("autocorrect.menuKeyD", () => modeController.menuPick("d")),
+    vscode.commands.registerCommand("autocorrect.menuKeyF", () => modeController.menuPick("f")),
+    vscode.commands.registerCommand("autocorrect.menuKeyQ", () => modeController.menuPick("q")),
+    vscode.commands.registerCommand("autocorrect.menuKeyL", () => modeController.menuPick("l")),
+
+    vscode.commands.registerCommand("autocorrect.captureMoveUp", () =>
+      modeController.captureMove("up")
+    ),
+    vscode.commands.registerCommand("autocorrect.captureMoveDown", () =>
+      modeController.captureMove("down")
+    ),
+    vscode.commands.registerCommand("autocorrect.captureMoveLineStart", () =>
+      modeController.captureMove("lineStart")
+    ),
+    vscode.commands.registerCommand("autocorrect.captureMoveLineEnd", () =>
+      modeController.captureMove("lineEnd")
+    ),
+    vscode.commands.registerCommand("autocorrect.captureEnd", () => modeController.captureEnd()),
+    vscode.commands.registerCommand("autocorrect.captureCancel", () =>
+      modeController.captureCancel()
+    ),
+
     vscode.commands.registerCommand("autocorrect.correctBlock", () =>
       blockCapture.correctBlock()
     ),
     vscode.commands.registerCommand("autocorrect.startBlockCapture", () =>
       blockCapture.startCapture()
     ),
-    vscode.commands.registerCommand("autocorrect.endBlockCapture", () =>
-      blockCapture.endCapture()
-    ),
-    vscode.commands.registerCommand("autocorrect.cancelBlockCapture", () =>
-      blockCapture.cancelCapture()
-    ),
+    vscode.commands.registerCommand("autocorrect.endBlockCapture", async () => {
+      await blockCapture.endCapture();
+      await modeController.exitCaptureAdjustMode();
+    }),
+    vscode.commands.registerCommand("autocorrect.cancelBlockCapture", () => {
+      blockCapture.cancelCapture();
+      void modeController.exitCaptureAdjustMode();
+    }),
 
-    // Documentation / comments on demand.
     vscode.commands.registerCommand("autocorrect.documentBlock", () =>
       commenter.documentBlock()
     ),
@@ -98,7 +137,6 @@ export function activate(context: vscode.ExtensionContext): void {
       commenter.cavemanComment()
     ),
 
-    // Queued execution: review/apply/clear staged line fixes.
     vscode.commands.registerCommand("autocorrect.reviewQueuedFixes", () =>
       fixQueue.review()
     ),

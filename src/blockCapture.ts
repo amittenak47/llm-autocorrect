@@ -18,7 +18,9 @@ import { StatusBar } from "./statusBar";
  */
 export class BlockCapture implements vscode.Disposable {
   private recording = false;
+  private keyboardAdjust = false;
   private startPosition: vscode.Position | undefined;
+  private headPosition: vscode.Position | undefined;
   private captureDocUri: string | undefined;
   private readonly captureDecoration: vscode.TextEditorDecorationType;
   private readonly disposables: vscode.Disposable[] = [];
@@ -81,17 +83,88 @@ export class BlockCapture implements vscode.Disposable {
     if (!this.profileFor(editor)) {
       return;
     }
-    this.recording = true;
-    this.startPosition = editor.selection.active;
-    this.captureDocUri = editor.document.uri.toString();
-    editor.setDecorations(this.captureDecoration, [this.captureRange(editor)]);
+    this.beginCapture(editor, editor.selection.active, false);
     vscode.window.setStatusBarMessage(
-      "Autocorrect: block capture started — type, then run End Block Capture & Correct",
+      "Autocorrect: block capture started — type, then End Block Capture & Correct",
       5000
     );
     this.output.appendLine(
-      `[block] capture started at ${editor.document.fileName}:${this.startPosition.line + 1}`
+      `[block] capture started at ${editor.document.fileName}:${this.startPosition!.line + 1}`
     );
+  }
+
+  /** Keyboard capture: anchor at cursor, move the far end with WASD. */
+  startKeyboardCapture(editor: vscode.TextEditor): boolean {
+    if (!this.profileFor(editor)) {
+      return false;
+    }
+    this.beginCapture(editor, editor.selection.active, true);
+    this.output.appendLine(
+      `[block] keyboard capture at ${editor.document.fileName}:${this.startPosition!.line + 1}`
+    );
+    return true;
+  }
+
+  isKeyboardCapture(): boolean {
+    return this.keyboardAdjust;
+  }
+
+  moveCaptureHead(dir: "up" | "down" | "lineStart" | "lineEnd"): void {
+    const editor = this.captureEditor();
+    if (!editor || !this.keyboardAdjust || !this.headPosition) {
+      return;
+    }
+    const doc = editor.document;
+    const line = this.headPosition.line;
+    switch (dir) {
+      case "up":
+        this.headPosition = new vscode.Position(Math.max(0, line - 1), this.headPosition.character);
+        break;
+      case "down":
+        this.headPosition = new vscode.Position(
+          Math.min(doc.lineCount - 1, line + 1),
+          this.headPosition.character
+        );
+        break;
+      case "lineStart":
+        this.headPosition = new vscode.Position(line, 0);
+        break;
+      case "lineEnd":
+        this.headPosition = new vscode.Position(line, doc.lineAt(line).text.length);
+        break;
+    }
+    this.syncHeadSelection(editor);
+    this.refreshDecoration(editor);
+  }
+
+  private beginCapture(editor: vscode.TextEditor, anchor: vscode.Position, keyboard: boolean): void {
+    this.recording = true;
+    this.keyboardAdjust = keyboard;
+    this.startPosition = anchor;
+    this.headPosition = anchor;
+    this.captureDocUri = editor.document.uri.toString();
+    if (keyboard) {
+      this.syncHeadSelection(editor);
+    }
+    this.refreshDecoration(editor);
+  }
+
+  private captureEditor(): vscode.TextEditor | undefined {
+    if (!this.captureDocUri) {
+      return undefined;
+    }
+    return vscode.window.visibleTextEditors.find(
+      (ed) => ed.document.uri.toString() === this.captureDocUri
+    );
+  }
+
+  private syncHeadSelection(editor: vscode.TextEditor): void {
+    if (!this.headPosition) {
+      return;
+    }
+    const pos = this.headPosition;
+    editor.selection = new vscode.Selection(pos, pos);
+    editor.revealRange(new vscode.Range(pos, pos));
   }
 
   /** Advance mode: extract start→cursor, clear the highlight, send the block. */
@@ -142,19 +215,25 @@ export class BlockCapture implements vscode.Disposable {
 
   private reset(): void {
     this.recording = false;
+    this.keyboardAdjust = false;
     this.startPosition = undefined;
+    this.headPosition = undefined;
     this.captureDocUri = undefined;
   }
 
-  /** Start mark to cursor, order-normalized (the user may have moved above the mark). */
+  /** Anchor to head, order-normalized. */
   private captureRange(editor: vscode.TextEditor): vscode.Range {
     const a = this.startPosition ?? editor.selection.active;
-    const b = editor.selection.active;
+    const b =
+      this.keyboardAdjust && this.headPosition ? this.headPosition : editor.selection.active;
     return a.isBeforeOrEqual(b) ? new vscode.Range(a, b) : new vscode.Range(b, a);
   }
 
   private onSelectionChange(e: vscode.TextEditorSelectionChangeEvent): void {
     if (!this.recording || e.textEditor.document.uri.toString() !== this.captureDocUri) {
+      return;
+    }
+    if (this.keyboardAdjust) {
       return;
     }
     this.refreshDecoration(e.textEditor);

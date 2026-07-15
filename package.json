@@ -76,15 +76,147 @@
       },
       {
         "command": "autocorrect.showMenu",
-        "title": "Autocorrect: Command Menu"
+        "title": "Autocorrect: Command Menu (QuickPick)"
+      },
+      {
+        "command": "autocorrect.enterMenuMode",
+        "title": "Autocorrect: Enter Menu Mode"
+      },
+      {
+        "command": "autocorrect.exitMenuMode",
+        "title": "Autocorrect: Exit Menu Mode"
+      },
+      {
+        "command": "autocorrect.menuKeyA",
+        "title": "Autocorrect: Menu — Block (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyS",
+        "title": "Autocorrect: Menu — Capture (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyD",
+        "title": "Autocorrect: Menu — Doc (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyF",
+        "title": "Autocorrect: Menu — Caveman (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyQ",
+        "title": "Autocorrect: Menu — Queue (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyL",
+        "title": "Autocorrect: Menu — Line (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveUp",
+        "title": "Autocorrect: Capture Move Up (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveDown",
+        "title": "Autocorrect: Capture Move Down (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveLineStart",
+        "title": "Autocorrect: Capture Line Start (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveLineEnd",
+        "title": "Autocorrect: Capture Line End (internal)"
+      },
+      {
+        "command": "autocorrect.captureEnd",
+        "title": "Autocorrect: Capture End & Correct"
+      },
+      {
+        "command": "autocorrect.captureCancel",
+        "title": "Autocorrect: Cancel Capture Adjust"
       }
     ],
     "keybindings": [
       {
-        "command": "autocorrect.showMenu",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a",
-        "when": "editorTextFocus"
+        "command": "autocorrect.enterMenuMode",
+        "key": "ctrl ctrl",
+        "mac": "cmd cmd",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.enterMenuMode",
+        "key": "ctrl+shift+;",
+        "mac": "cmd+shift+;",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.exitMenuMode",
+        "key": "escape",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyA",
+        "key": "a",
+        "when": "editorTextFocus && autocorrect.menuMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyS",
+        "key": "s",
+        "when": "editorTextFocus && autocorrect.menuMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyD",
+        "key": "d",
+        "when": "editorTextFocus && autocorrect.menuMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyF",
+        "key": "f",
+        "when": "editorTextFocus && autocorrect.menuMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyQ",
+        "key": "q",
+        "when": "editorTextFocus && autocorrect.menuMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyL",
+        "key": "l",
+        "when": "editorTextFocus && autocorrect.menuMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveUp",
+        "key": "w",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveDown",
+        "key": "s",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveLineStart",
+        "key": "a",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveLineEnd",
+        "key": "d",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureEnd",
+        "key": "e",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureEnd",
+        "key": "enter",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureCancel",
+        "key": "escape",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
       }
     ],
     "configuration": {
