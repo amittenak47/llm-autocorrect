@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { activeLlmProfile, cfg } from "./config";
+import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
 import { ContextAssemblerService } from "./contextAssembler";
 import { shouldFixLine } from "./diagnosticGate";
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
-import { FixQueue } from "./fixQueue";
+import { FixQueue, QueuedFix } from "./fixQueue";
 import { LlmRouter } from "./llmRouter";
 import { lineFixUserMessage } from "./promptContext";
 import { trimContextLines } from "./promptLimits";
@@ -213,12 +213,33 @@ export class LineCorrector implements vscode.Disposable {
     await this.check(doc.uri, line, profile, true, queue);
   }
 
+  async executeQueuedLine(fix: QueuedFix): Promise<boolean> {
+    const doc = this.docFor(vscode.Uri.parse(fix.uri));
+    if (!doc || doc.isClosed || fix.line >= doc.lineCount) {
+      return false;
+    }
+    if (doc.lineAt(fix.line).text !== fix.original) {
+      return false;
+    }
+    const profile = PROFILES[doc.languageId];
+    if (!profile) {
+      return false;
+    }
+    await this.check(doc.uri, fix.line, profile, true, false, fix.profileId);
+    return doc.lineAt(fix.line).text !== fix.original;
+  }
+
   private docFor(uri: vscode.Uri): vscode.TextDocument | undefined {
     return vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
   }
 
   private async check(
-    uri: vscode.Uri, line: number, profile: LanguageProfile, force: boolean, queue = false
+    uri: vscode.Uri,
+    line: number,
+    profile: LanguageProfile,
+    force: boolean,
+    queue = false,
+    profileIdOverride?: string
   ): Promise<void> {
     const doc = this.docFor(uri);
     if (!doc || doc.isClosed || line >= doc.lineCount) {
@@ -247,6 +268,14 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
 
+    const wantsQueue = queue || (!force && cfg().queueEnabled);
+    if (wantsQueue && isDeferQueueMode()) {
+      const pid = profileIdOverride ?? activeLlmProfile().id;
+      this.queue.addPendingLine(doc, line, original, pid);
+      vscode.window.setStatusBarMessage("Autocorrect: task queued — Q to run", 4000);
+      return;
+    }
+
     const c = cfg();
     const contextStart = Math.max(0, line - c.contextLines);
     const contextLines: string[] = [];
@@ -255,7 +284,9 @@ export class LineCorrector implements vscode.Disposable {
     }
     const context = trimContextLines(contextLines, c.contextLines, c.maxLineChars);
 
-    const llmProfile = activeLlmProfile();
+    const llmProfile = profileIdOverride
+      ? (this.router.profileById(profileIdOverride) ?? activeLlmProfile())
+      : activeLlmProfile();
     const tiers = force ? c.defaultTiers : { ...c.defaultTiers, recentEdits: false, openTabs: false, yank: false };
     const assembled = this.contextAsm.assembleLine(doc, line, profile, tiers, llmProfile);
     const finalUser = assembled.supplementary.trim()
@@ -330,9 +361,9 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
 
-    // Queued mode: stage automatic fixes for later review instead of applying on Enter.
-    if (queue || (!force && cfg().queueEnabled)) {
-      this.queue.addLine(doc, line, original, corrected);
+    // Queued mode (reviewChanges): LLM now, review proposed edit on Q.
+    if (wantsQueue) {
+      this.queue.addLine(doc, line, original, corrected, llmProfile.id);
       return;
     }
 

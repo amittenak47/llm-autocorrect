@@ -33,8 +33,10 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
 | **Stage Context** | **1** lines above/below the target · **2** enclosing `def` / `class` / `function` header · **3** recent edit hunks in this file · **4** imports + signatures from other open editor tabs · **5** last large copy/selection snippet. Tiers **3**–**5** require `context.ringEnabled`. |
 | **Multi-profile LLM** | Groq, Gemini, Anthropic, local llama-server side by side. Choose profile with **M** / **Shift+M** during the modifier step (before **E** / **Shift+E**); that profile owns the request and its queue slot. |
-| **Queued staged requests** | **Q** reviews the queue for the **currently selected profile** only; **Shift+Q** reviews **all profiles** (when you sent to different LLMs). Amber highlight on every queued line. |
-| **Review before apply** | `queue.enabled` — Enter autocorrect still runs; fixes wait for your review instead of applying to the file immediately. |
+| **Queue mode** (`queue.mode`) | **Mutually exclusive.** **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). **Deferred batch** (`deferExecution`): enqueue stores **tasks** only (blue dotted); **Q** / **Shift+Q** run selected tasks — LLM + immediate apply, **parallel per profile** (no diff review). |
+| **Per-profile concurrency** | Each LLM profile has its own async request pool (`maxConcurrent`: default **1** localhost, **2** cloud). Deferred batch and all LLM calls share the limit — not OS threads, but independent in-flight caps per endpoint. |
+| **Queued staged requests** | **Shift+E** enqueues (behavior depends on `queue.mode`). **Q** = current profile; **Shift+Q** = all profiles. |
+| **Review before apply (Enter)** | `queue.enabled` — Enter still autocorrects; uses the active `queue.mode` (review changes vs defer task). |
 | **Manual-only Enter** | `disableAutocorrect` — no automatic Enter fixes; call the LLM only when you use menu/staged keys. |
 | **LSP or deliberate** | **Automatic:** Enter can require an LSP squiggle first (`line.requireDiagnostic`). **Deliberate:** menu/staged sends on demand (`fix.requireDiagnostic` optional). **Off:** `disableAutocorrect` stops Enter autocorrect entirely. |
 | **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). |
@@ -131,9 +133,10 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | --- | --- |
 | Green dashed lines | Staged block |
 | Colored left border | Active LLM profile |
-| **1–5** in gutter (staged line) | Context tiers enabled |
-| Op dot (fix / documentation / caveman) | Current modifier (best-guess fix / documentation / caveman) |
-| Amber lines (each line in range) | Queued fix pending review |
+| **1–5** before first staged line | Context tier toggles (inline, not line-number gutter) |
+| Modifier dot (fix / docs / caveman) | Filled circle in the **line-number gutter** and inline before the first staged line — blue fix, purple docs, orange caveman |
+| Amber dashed lines | **Checkpoint review** — queued edits ready to apply (`reviewChanges`) |
+| Blue dotted lines | **Deferred batch** — tasks waiting to run (`deferExecution`) |
 
 Status bar shows modifiers and token estimate, e.g. `fix · @Groq free · ctx:12 · ~840tok`.
 
@@ -156,7 +159,7 @@ Each tutorial assumes you opened the menu unless noted.
 
 - Default `line.requireDiagnostic: true` — no squiggle, no API call (saves tokens).
 - Set `line.requireDiagnostic: false` to fix on Enter even without LSP errors. **Token cost:** every Enter on a non-blank line can trigger an LLM call after debounce, even when the line is already fine (you still pay for the prompt; the extension skips apply if the model returns the same text).
-- Want Enter fixes to **wait for review** instead of applying right away? See tutorial **15** — review before apply (`queue.enabled`).
+- Want Enter fixes to **queue** instead of applying right away? See tutorial **15** — Enter queue mode (`queue.enabled` + `queue.mode`).
 - Want to **stop Enter fixes entirely** and only call the LLM when you ask? See tutorial **16** (`disableAutocorrect`).
 
 ---
@@ -307,7 +310,8 @@ Defaults come from `context.defaultTiers`. Token budget: profile `contextPolicy`
       "label": "Groq free",
       "provider": "groq",
       "contextPolicy": "minimal",
-      "timeoutMs": 5000
+      "timeoutMs": 5000,
+      "maxConcurrent": 3
     },
     {
       "id": "local",
@@ -316,7 +320,8 @@ Defaults come from `context.defaultTiers`. Token budget: profile `contextPolicy`
       "baseUrl": "http://127.0.0.1:8080/v1",
       "model": "local",
       "contextPolicy": "extended",
-      "timeoutMs": 60000
+      "timeoutMs": 60000,
+      "maxConcurrent": 1
     }
   ],
   "autocorrect.activeProfile": "groq"
@@ -332,6 +337,8 @@ Set API key per profile: **Autocorrect: Set API Key**.
 3. **E** (tutorial 12) / **Shift+E** (tutorial 13) sends via that profile.
 
 Legacy `autocorrect.provider` / `model` / `baseUrl` still work when `profiles` is empty (single `"default"` profile).
+
+**Concurrency:** Each profile caps simultaneous LLM requests (`maxConcurrent`). Defaults: **1** for localhost, **2** for cloud. Deferred batch **Q** runs tasks in parallel across profiles and up to each profile's limit — not OS threads, but separate async pools per endpoint.
 
 **Local llama-server**
 
@@ -356,47 +363,52 @@ Default modifier is **best-guess fix**. Status bar shows active modifiers and to
 
 ### 13. Enqueue send (Shift+E)
 
-**When:** Same staging and modifiers as tutorial **12**, but you want **review before apply** instead of writing to the file immediately.
+**When:** Same staging and modifiers as tutorial **12**, but you want to **queue** instead of applying immediately. Behavior depends on **`queue.mode`** — pick one (mutually exclusive):
+
+| Setting value | Name | **Shift+E** does | **Q** / **Shift+Q** does |
+| --- | --- | --- | --- |
+| **`reviewChanges`** | **Checkpoint review** (default) | Calls LLM **now**; stores proposed edit (amber) | Review **edits** — apply checked, discard unchecked |
+| **`deferExecution`** | **Deferred batch** | Stores **task** only — no LLM yet (blue dotted) | Run checked tasks — LLM + apply immediately (parallel per profile) |
 
 1. Stage and set modifiers (tutorials **4**–**11**).
-2. Press **Shift+E** — fix is stored; amber highlight on **all** lines in the block.
-3. Review with **Q** / **Shift+Q** (tutorial **14**).
-
-Queue stores modifier choice, **X** note, and **profile**.
+2. Press **Shift+E**.
+3. Open the menu → **Q** or **Shift+Q** (tutorial **14**).
 
 ---
 
-### 14. Review queued fixes — **Q** (current profile), **Shift+Q** (all profiles)
+### 14. Review queue — **Q** (current profile), **Shift+Q** (all profiles)
 
-**When:** You enqueued with **Shift+E** (tutorial **13**) or used review-before-apply on Enter (tutorial **15**) and want to validate fixes before they hit the file.
+**When:** You enqueued with **Shift+E** (tutorial **13**) or used Enter queue mode (tutorial **15**).
 
-**Review current profile** (**Q**)
+**Checkpoint review** (`reviewChanges`) — review **proposed edits**
 
-1. Open the menu → **Q** — shows queued fixes for the **currently selected LLM profile** only.
-2. QuickPick: checked items apply; unchecked are **discarded**.
-3. **Esc** leaves the queue unchanged.
+1. Open the menu → **Q** (current profile) or **Shift+Q** (all).
+2. QuickPick shows `original → corrected` previews.
+3. Checked items **apply**; unchecked are **discarded**.
 
-**Review all profiles** (**Shift+Q**)
+**Deferred batch** (`deferExecution`) — run **queued tasks**
 
-1. Open the menu → **Shift+Q** — items from every profile, each labeled by profile (use when you sent to different LLMs).
+1. Open the menu → **Q** or **Shift+Q**.
+2. QuickPick lists pending **tasks** (op, lines, snippet) — no diff yet.
+3. Checked tasks run (**LLM + immediate apply**, up to each profile's `maxConcurrent`); unchecked are discarded.
 
 **Palette shortcuts**
 
 - **Review Queued Fixes** — all profiles (same as **Shift+Q**).
-- **Apply All Queued Fixes** — apply entire queue without stepping through the picker.
+- **Apply All Queued Fixes** — apply all **checkpoint review** items without picker (deferred batch queue ignored).
 
 ---
 
-### 15. Review before apply (`queue.enabled`)
+### 15. Enter queue mode (`queue.enabled`)
 
-**When:** You still want line-by-line autocorrect on **Enter**, but you do **not** want each fix written to the file immediately. You want one checkpoint to review everything you typed — typos, syntax fixes, and any other Enter-triggered corrections — and accept or reject each one.
+**When:** You want **Enter** autocorrect to queue instead of applying immediately. Uses the active **`queue.mode`**:
 
-**This setting does not stop Enter autocorrect.** It only changes what happens after the LLM responds: the suggestion is held for **review before apply** (amber highlight) instead of replacing your line.
+- **Checkpoint review** — Enter calls LLM; amber lines; **Q** reviews edits.
+- **Deferred batch** — Enter queues tasks; blue dotted lines; **Q** runs tasks in parallel per profile.
 
 1. Set `"autocorrect.queue.enabled": true` or run **Toggle Review Before Apply Mode**.
-2. Type and press **Enter** as usual — the extension still checks the line you left and may call the LLM.
-3. Suggested fixes accumulate for review (amber on each affected line).
-4. When you are ready, open the menu → **Q** or **Shift+Q** (tutorial 14) — or use palette commands — and validate each correction before it is applied.
+2. Type and press **Enter** as usual.
+3. When ready, **Q** / **Shift+Q** (tutorial **14**).
 
 Manual **C** / staged **E** still apply immediately unless you use **Shift+E**.
 
@@ -505,7 +517,8 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | `autocorrect.context.defaultTiers` | nearby on | Default tier modifiers in staged mode |
 | `autocorrect.timeoutMs` | `0` | `0` = auto (**5s** cloud, **60s** localhost) |
 | `autocorrect.line.debounceMs` | `800` | Delay after Enter before check |
-| `autocorrect.queue.enabled` | `false` | Review before apply on Enter; validate at a checkpoint (tutorial 15) |
+| `autocorrect.queue.mode` | `reviewChanges` | **Checkpoint review** vs **deferred batch** (tutorial 13–14). Values: `reviewChanges` \| `deferExecution` |
+| `autocorrect.queue.enabled` | `false` | Enter queues instead of applying; uses `queue.mode` (tutorial 15) |
 | `autocorrect.debug` | `false` | Verbose output channel logs |
 
 ### Supported languages
@@ -582,7 +595,8 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | **Log says `no LSP squiggle`** | With default `line.requireDiagnostic: true`, Enter only calls the LLM when the language server reports an error/warning on that line. Fix LSP setup (**View → Problems**), or temporarily set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor Python, see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
 | **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
 | **`already correct` / no edit** | Model returned the same line or `UNCHANGED`. Normal — no apply, but you may still have paid for the prompt. |
-| **Enter fixes held for review** | `queue.enabled: true` — fixes stay amber until you review (**Q** / **Shift+Q** or palette). Review before apply mode (tutorial 15). |
+| **Enter queued** | `queue.enabled: true` — Enter queues per `queue.mode`: amber = checkpoint review, blue dotted = deferred batch (tutorial 15). |
+| **Deferred batch slow or rate-limited** | Raise `maxConcurrent` on cloud profiles (e.g. Groq `3`). Keep localhost at `1`. Tasks run in parallel per profile on **Q**, not one global serial queue. |
 | **Enter does nothing at all (no log)** | Likely `disableAutocorrect: true` or `line.enabled: false`. Status bar shows `(manual)` when Enter autocorrect is off. |
 
 ### Menu, staged mode, and manual fixes
@@ -610,7 +624,7 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 
 | Problem | What to check |
 | --- | --- |
-| **`queue.enabled` vs `disableAutocorrect`** | **`queue.enabled`** — review before apply: Enter still autocorrects; you validate before changes hit the file (tutorial 15). **`disableAutocorrect`** — Enter does nothing; you fix on demand only (tutorial 16). They solve different problems. |
+| **`queue.enabled` vs `disableAutocorrect`** | **`queue.enabled`** — Enter still autocorrects but queues per `queue.mode` (tutorial 15). **`disableAutocorrect`** — Enter does nothing; you fix on demand only (tutorial 16). They solve different problems. |
 | **Paste translate never offers** | `autocorrect.paste.enabled` must be true. Only triggers on paste that looks like a *different* language than the file. Never silent — you must accept the prompt. |
 
 ---
@@ -619,6 +633,8 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 
 - Broader language testing (Go, Rust, JS/TS, etc.).
 - **Docs (D) and caveman (F) modifiers** — prompts and output validation still being refined for more accurate, consistent results.
+- **Testing and refining context tiers** — the existing **1**–**5** tiers (nearby lines, signature, recent edits, open tabs, yank) need more real-world tuning; token cost vs accuracy tradeoffs are not settled yet.
+- **Context hierarchy and request deduplication** — explore smarter micro-context assembly and collapsing overlapping requests. Surgical line/block fixes may not benefit much from dedup (each target is intentional); file-level context sharing might help efficiency but risks blurring surgical intent. Module- or project-wide context belongs in the **Cursor agent**, not this extension — we need a clear **micro-context** boundary: what stays in autocorrect vs what you delegate upstream.
 
 ---
 

@@ -6,7 +6,13 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ### Added
 
+- **`autocorrect.queue.mode`** — **Checkpoint review** (`reviewChanges`) vs **deferred batch** (`deferExecution`). Mutually exclusive binding.
+- **Per-profile concurrency** — `maxConcurrent` on each profile (default 1 localhost, 2 cloud); deferred batch runs tasks in parallel per profile up to the limit.
 - **`autocorrect.disableAutocorrect`** — turn off Enter-triggered line fixes while keeping manual fixes, staged **Shift+E** enqueue, and queue review.
+
+### Changed
+
+- Op/modifier indicator: filled circle in the line-number gutter and inline before the first staged line (not gutter-only).
 
 ## [0.2.0] - 2026-07-15
 

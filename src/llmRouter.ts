@@ -4,6 +4,7 @@ import { CLOUD_DEFAULT_TIMEOUT_MS, LOCAL_DEFAULT_TIMEOUT_MS, isLocalBaseUrl } fr
 import { LlmClient } from "./llm";
 import { capMaxTokens } from "./promptLimits";
 import { effectiveProfileTimeout, LlmProfileConfig } from "./profiles";
+import { ProfileConcurrency } from "./profileConcurrency";
 
 export interface RoutedRequest {
   system: string;
@@ -14,7 +15,10 @@ export interface RoutedRequest {
 }
 
 export class LlmRouter {
-  constructor(private readonly client: LlmClient) {}
+  constructor(
+    private readonly client: LlmClient,
+    private readonly concurrency: ProfileConcurrency
+  ) {}
 
   get activeProfile(): LlmProfileConfig {
     return activeLlmProfile();
@@ -39,6 +43,10 @@ export class LlmRouter {
     const profile = req.profileId
       ? this.profileById(req.profileId) ?? this.activeProfile
       : this.activeProfile;
+    return this.concurrency.run(profile.id, () => this.completeForProfile(profile, req));
+  }
+
+  private async completeForProfile(profile: LlmProfileConfig, req: RoutedRequest): Promise<string> {
     const timeoutMs = this.resolveTimeout(profile);
     const signal = AbortSignal.any([req.signal, AbortSignal.timeout(timeoutMs)]);
     const maxTokens = capMaxTokens(profile.provider, req.maxTokens, req.system, req.user);

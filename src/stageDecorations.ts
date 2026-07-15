@@ -9,6 +9,17 @@ const OP_COLORS: Record<string, string> = {
   caveman: "rgba(251, 146, 60, 0.35)",
 };
 
+const OP_GUTTER_HEX: Record<string, string> = {
+  fix: "#4a9eff",
+  docs: "#a78bfa",
+  caveman: "#fb923c",
+};
+
+function gutterDotUri(hex: string): vscode.Uri {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="5" fill="${hex}"/></svg>`;
+  return vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
+}
+
 const TIER_COLORS = [
   "rgba(45, 212, 191, 0.5)",
   "rgba(96, 165, 250, 0.5)",
@@ -19,7 +30,6 @@ const TIER_COLORS = [
 
 export class StageDecorations implements vscode.Disposable {
   private readonly profileBorder: vscode.TextEditorDecorationType;
-  private readonly opGutter: vscode.TextEditorDecorationType;
   private readonly tierMarks: vscode.TextEditorDecorationType[] = [];
   private stagedRange: vscode.Range | undefined;
   private stagedUri: string | undefined;
@@ -30,12 +40,6 @@ export class StageDecorations implements vscode.Disposable {
       isWholeLine: true,
       borderWidth: "0 0 0 4px",
       borderStyle: "solid",
-    });
-    this.opGutter = vscode.window.createTextEditorDecorationType({
-      before: {
-        contentText: "●",
-        margin: "0 0.4em 0 0",
-      },
     });
     for (let i = 0; i < 5; i++) {
       this.tierMarks.push(
@@ -74,7 +78,6 @@ export class StageDecorations implements vscode.Disposable {
       const uri = editor.document.uri.toString();
       if (uri !== this.stagedUri || !this.stagedRange || !this.attrs) {
         editor.setDecorations(this.profileBorder, []);
-        editor.setDecorations(this.opGutter, []);
         for (const d of this.tierMarks) {
           editor.setDecorations(d, []);
         }
@@ -98,8 +101,16 @@ export class StageDecorations implements vscode.Disposable {
       borderDeco.dispose();
 
       const opColor = OP_COLORS[this.attrs.op] ?? OP_COLORS.fix;
+      const opHex = OP_GUTTER_HEX[this.attrs.op] ?? OP_GUTTER_HEX.fix;
       const opDeco = vscode.window.createTextEditorDecorationType({
-        before: { contentText: "●", color: opColor.replace("0.35", "1"), margin: "0 0.3em 0 0" },
+        gutterIconPath: gutterDotUri(opHex),
+        gutterIconSize: "75%",
+        before: {
+          contentText: "$(circle-filled)",
+          color: opColor.replace("0.35", "1"),
+          margin: "0 1ch 0 0",
+          fontWeight: "bold",
+        },
       });
       editor.setDecorations(opDeco, [new vscode.Range(this.stagedRange.start.line, 0, this.stagedRange.start.line, 0)]);
       opDeco.dispose();
@@ -120,7 +131,6 @@ export class StageDecorations implements vscode.Disposable {
 
   dispose(): void {
     this.profileBorder.dispose();
-    this.opGutter.dispose();
     for (const d of this.tierMarks) {
       d.dispose();
     }

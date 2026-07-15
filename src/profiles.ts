@@ -27,6 +27,8 @@ export interface LlmProfileConfig {
   baseUrl?: string;
   contextPolicy?: ContextPolicy;
   timeoutMs?: number;
+  /** Max concurrent LLM requests for this profile (default: 1 local, 2 cloud). */
+  maxConcurrent?: number;
   color?: string;
 }
 
@@ -64,6 +66,13 @@ export function effectiveProfileTimeout(profile: LlmProfileConfig, globalTimeout
 
 export function profileColor(profile: LlmProfileConfig, index: number): string {
   return profile.color ?? PROFILE_COLORS[index % PROFILE_COLORS.length];
+}
+
+export function defaultMaxConcurrent(profile: LlmProfileConfig): number {
+  if (profile.provider === "openai-compatible" && isLocalBaseUrl(profile.baseUrl ?? "")) {
+    return 1;
+  }
+  return 2;
 }
 
 /** Build default profile list from legacy single-provider settings. */

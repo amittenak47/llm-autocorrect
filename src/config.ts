@@ -6,6 +6,8 @@ import {
   migrateLegacyProfile,
 } from "./profiles";
 
+export type QueueMode = "reviewChanges" | "deferExecution";
+
 export function cfg() {
   const c = vscode.workspace.getConfiguration("autocorrect");
   const legacyProvider = c.get<string>("provider", "groq");
@@ -45,6 +47,7 @@ export function cfg() {
     debug: c.get<boolean>("debug", false),
     timeoutMs: c.get<number>("timeoutMs", 0),
     queueEnabled: c.get<boolean>("queue.enabled", false),
+    queueMode: c.get<QueueMode>("queue.mode", "reviewChanges"),
     profiles,
     activeProfile,
     // Legacy — used when profiles array is empty fallback only
@@ -52,6 +55,10 @@ export function cfg() {
     model: legacyModel,
     baseUrl: legacyBaseUrl,
   };
+}
+
+export function isDeferQueueMode(): boolean {
+  return cfg().queueMode === "deferExecution";
 }
 
 export function activeLlmProfile(): LlmProfileConfig {

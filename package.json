@@ -503,6 +503,11 @@
                 "enum": ["minimal", "standard", "extended"]
               },
               "timeoutMs": { "type": "number" },
+              "maxConcurrent": {
+                "type": "number",
+                "minimum": 1,
+                "description": "Max concurrent LLM requests for this profile (default: 1 for localhost, 2 for cloud)."
+              },
               "color": { "type": "string" }
             }
           }
@@ -527,10 +532,24 @@
           "default": 0,
           "description": "Abort LLM requests after this many ms (0 = auto: 5s cloud, 60s localhost openai-compatible)."
         },
+        "autocorrect.queue.mode": {
+          "type": "string",
+          "enum": ["reviewChanges", "deferExecution"],
+          "default": "reviewChanges",
+          "enumItemLabels": [
+            "Checkpoint review",
+            "Deferred batch"
+          ],
+          "enumDescriptions": [
+            "Checkpoint review: enqueue calls the LLM immediately; Q/Shift+Q review proposed edits before apply (amber highlights).",
+            "Deferred batch: enqueue stores tasks only; Q/Shift+Q runs selected tasks (LLM + immediate apply, parallel per profile)."
+          ],
+          "description": "Queue behavior (mutually exclusive). Checkpoint review = edit checkpoints before apply. Deferred batch = batch LLM run on Q."
+        },
         "autocorrect.queue.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Review before apply: Enter-triggered line autocorrect still runs, but fixes are held for review instead of applied immediately. Review with Q/Shift+Q or palette commands."
+          "description": "Enter queue mode: Enter-triggered autocorrect queues instead of applying immediately. Behavior follows autocorrect.queue.mode (reviewChanges = review edits on Q; deferExecution = run tasks on Q)."
         }
       }
     }

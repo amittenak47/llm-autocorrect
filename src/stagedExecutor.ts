@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { applyBlockText, blockLineRange } from "./blockApply";
 import { blockMaxTokens } from "./blockMath";
-import { activeLlmProfile, cfg } from "./config";
+import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
 import {
   ContextAssemblerService,
   formatBlockWithContext,
@@ -55,6 +55,29 @@ export class StagedExecutor {
       return { ok: false };
     }
 
+    const llmProfile =
+      this.router.profileById(attrs.profileId) ?? this.router.activeProfile;
+    const queueLabel = `${attrs.op} ${blockRange.start.line + 1}-${blockRange.end.line + 1} · ${attrs.contextNote || "no ctx"}`;
+
+    if (queue && isDeferQueueMode()) {
+      this.queue.addPendingBlock(
+        doc,
+        blockRange.start.line,
+        blockRange.end.line,
+        text,
+        queueLabel,
+        attrs.op,
+        attrs.contextNote,
+        llmProfile.id,
+        attrs.tiers
+      );
+      vscode.window.setStatusBarMessage(
+        `Autocorrect: task queued [${llmProfile.label}] — Q to run`,
+        5000
+      );
+      return { ok: true, queued: true };
+    }
+
     if (!shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output)) {
       vscode.window.setStatusBarMessage(
         "Autocorrect: no LSP error in block — skipped (fix.requireDiagnostic)",
@@ -63,8 +86,6 @@ export class StagedExecutor {
       return { ok: false };
     }
 
-    const llmProfile =
-      this.router.profileById(attrs.profileId) ?? this.router.activeProfile;
     const assembled = this.contextAsm.assembleBlock(editor, blockRange, attrs.tiers, llmProfile);
     const codePayload = formatBlockWithContext(text, assembled.supplementary);
     const userMsg = blockFixUserMessage(codePayload, attrs.contextNote);
@@ -131,8 +152,6 @@ export class StagedExecutor {
       this.output.appendLine(`[staged] line count ${inLines} → ${outLines} (block replace)`);
     }
 
-    const queueLabel = `${attrs.op} ${blockRange.start.line + 1}-${blockRange.end.line + 1} · ${attrs.contextNote || "no ctx"}`;
-
     if (queue) {
       this.queue.addBlock(
         doc,
@@ -143,10 +162,11 @@ export class StagedExecutor {
         queueLabel,
         attrs.op,
         attrs.contextNote,
-        llmProfile.id
+        llmProfile.id,
+        attrs.tiers
       );
       vscode.window.setStatusBarMessage(
-        `Autocorrect: queued [${llmProfile.label}] — Q to review`,
+        `Autocorrect: queued [${llmProfile.label}] — Q to review changes`,
         5000
       );
       return { ok: true, queued: true };

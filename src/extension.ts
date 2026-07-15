@@ -10,11 +10,13 @@ import { Flash } from "./flash";
 import { LineCorrector } from "./lineCorrector";
 import { LlmClient, secretKeyForProfile } from "./llm";
 import { LlmRouter } from "./llmRouter";
+import { ProfileConcurrency } from "./profileConcurrency";
 import { clearAllModes } from "./modeContext";
 import { ModeController } from "./modeController";
 import { PasteTranslator } from "./pasteTranslator";
 import { StageDecorations } from "./stageDecorations";
 import { StagedExecutor } from "./stagedExecutor";
+import { QueueExecutor } from "./queueExecutor";
 import { StatusBar } from "./statusBar";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -22,7 +24,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBar = new StatusBar();
   const flash = new Flash();
   const llm = new LlmClient(context.secrets);
-  const router = new LlmRouter(llm);
+  const profileConcurrency = new ProfileConcurrency();
+  const router = new LlmRouter(llm, profileConcurrency);
   const contextAsm = new ContextAssemblerService();
   const stageDeco = new StageDecorations();
   const fixQueue = new FixQueue(statusBar, output);
@@ -37,6 +40,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     flash,
     output
   );
+  const queueExecutor = new QueueExecutor(stagedExecutor, lineCorrector);
+  fixQueue.setExecutor(queueExecutor);
   const commenter = new Commenter(stagedExecutor, blockCapture);
   const modeController = new ModeController(
     blockCapture,
