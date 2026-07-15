@@ -10,8 +10,8 @@ const ITEMS: MenuItem[] = [
   { label: "/line", description: "Correct line near cursor", command: "autocorrect.correctSelection" },
   { label: "/doc", description: "Docstrings & comments", command: "autocorrect.documentBlock" },
   { label: "/caveman", description: "Ultra-short inline comments", command: "autocorrect.cavemanComment" },
-  { label: "/context", description: "Set block context for next send", command: "autocorrect.captureSetContext" },
-  { label: "/queue", description: "Review queued fixes", command: "autocorrect.reviewQueuedFixes" },
+  { label: "/context", description: "Staged context note (enter menu + stage first)", command: "autocorrect.stagedSetContext" },
+  { label: "/queue", description: "Review queued fixes (all profiles)", command: "autocorrect.reviewQueuedFixes" },
   { label: "/translate", description: "Translate selection", command: "autocorrect.translateSelection" },
 ];
 

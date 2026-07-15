@@ -1,15 +1,14 @@
 import * as vscode from "vscode";
-import { cfg } from "./config";
+import { activeLlmProfile, cfg } from "./config";
+import { ContextAssemblerService } from "./contextAssembler";
 import { shouldFixLine } from "./diagnosticGate";
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
 import { FixQueue } from "./fixQueue";
-import { LlmClient } from "./llm";
+import { LlmRouter } from "./llmRouter";
 import { lineFixUserMessage } from "./promptContext";
 import { trimContextLines } from "./promptLimits";
 import { fixForSingleLineTarget, isUnchanged, modelLines, normalizeModelText } from "./responseIngress";
 import { StatusBar } from "./statusBar";
-
-const CONTEXT_LINES = 10;
 
 interface Pending {
   timer?: ReturnType<typeof setTimeout>;
@@ -26,7 +25,8 @@ export class LineCorrector implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
-    private readonly llm: LlmClient,
+    private readonly router: LlmRouter,
+    private readonly contextAsm: ContextAssemblerService,
     private readonly statusBar: StatusBar,
     private readonly queue: FixQueue,
     private readonly output: vscode.OutputChannel
@@ -247,12 +247,23 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
 
-    const contextStart = Math.max(0, line - CONTEXT_LINES);
+    const c = cfg();
+    const contextStart = Math.max(0, line - c.contextLines);
     const contextLines: string[] = [];
     for (let i = contextStart; i < line; i++) {
       contextLines.push(doc.lineAt(i).text);
     }
-    const context = trimContextLines(contextLines, CONTEXT_LINES, 200);
+    const context = trimContextLines(contextLines, c.contextLines, c.maxLineChars);
+
+    const llmProfile = activeLlmProfile();
+    const tiers = force ? c.defaultTiers : { ...c.defaultTiers, recentEdits: false, openTabs: false, yank: false };
+    const assembled = this.contextAsm.assembleLine(doc, line, profile, tiers, llmProfile);
+    const finalUser = assembled.supplementary.trim()
+      ? lineFixUserMessage(
+          `${assembled.supplementary}\n\nContext (lines above the target):\n${context || "(start of file)"}`,
+          original
+        )
+      : lineFixUserMessage(context, original);
 
     const key = this.key(doc.uri, line);
     const abort = new AbortController();
@@ -263,7 +274,7 @@ export class LineCorrector implements vscode.Disposable {
     let response: string;
     try {
       response = await this.statusBar.withBusy(() =>
-        this.llm.complete({
+        this.router.complete({
           system:
             `You are a strict single-line code autocorrector for ${profile.name}. ` +
             `The user shows you surrounding context and one TARGET line. ` +
@@ -273,9 +284,10 @@ export class LineCorrector implements vscode.Disposable {
             `If the line is already correct, reply with exactly: UNCHANGED\n` +
             `Never add explanations, quotes, or code fences. ` +
             `Never rewrite working code stylistically — fix mistakes only.`,
-          user: lineFixUserMessage(context, original),
+          user: finalUser,
           maxTokens: 300,
           signal: abort.signal,
+          profileId: llmProfile.id,
         })
       );
     } catch (err) {

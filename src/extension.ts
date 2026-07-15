@@ -2,15 +2,18 @@ import * as vscode from "vscode";
 import { BlockCapture } from "./blockCapture";
 import { blockLineRange } from "./blockApply";
 import { showCommandMenu } from "./commandMenu";
-import { cfg, setEnabled, setQueueEnabled } from "./config";
+import { activeLlmProfile, cfg, setDisableAutocorrect, setEnabled, setQueueEnabled } from "./config";
+import { ContextAssemblerService } from "./contextAssembler";
 import { Commenter } from "./commenter";
 import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { LineCorrector } from "./lineCorrector";
-import { LlmClient, secretKeyFor } from "./llm";
+import { LlmClient, secretKeyForProfile } from "./llm";
+import { LlmRouter } from "./llmRouter";
 import { clearAllModes } from "./modeContext";
 import { ModeController } from "./modeController";
 import { PasteTranslator } from "./pasteTranslator";
+import { StageDecorations } from "./stageDecorations";
 import { StagedExecutor } from "./stagedExecutor";
 import { StatusBar } from "./statusBar";
 
@@ -19,17 +22,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBar = new StatusBar();
   const flash = new Flash();
   const llm = new LlmClient(context.secrets);
+  const router = new LlmRouter(llm);
+  const contextAsm = new ContextAssemblerService();
+  const stageDeco = new StageDecorations();
   const fixQueue = new FixQueue(statusBar, output);
-  const lineCorrector = new LineCorrector(llm, statusBar, fixQueue, output);
-  const pasteTranslator = new PasteTranslator(llm, statusBar, output);
+  const lineCorrector = new LineCorrector(router, contextAsm, statusBar, fixQueue, output);
+  const pasteTranslator = new PasteTranslator(router, statusBar, output);
   const blockCapture = new BlockCapture(output);
-  const stagedExecutor = new StagedExecutor(llm, fixQueue, statusBar, flash, output);
+  const stagedExecutor = new StagedExecutor(
+    router,
+    contextAsm,
+    fixQueue,
+    statusBar,
+    flash,
+    output
+  );
   const commenter = new Commenter(stagedExecutor, blockCapture);
   const modeController = new ModeController(
     blockCapture,
     stagedExecutor,
     lineCorrector,
     fixQueue,
+    router,
+    contextAsm,
+    stageDeco,
     output
   );
 
@@ -41,6 +57,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar,
     flash,
     fixQueue,
+    contextAsm,
+    stageDeco,
     lineCorrector,
     pasteTranslator,
     blockCapture,
@@ -58,27 +76,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand("autocorrect.setApiKey", async () => {
-      const provider = await vscode.window.showQuickPick(
-        ["groq", "gemini", "anthropic", "openai-compatible"],
-        { placeHolder: "Provider to set the API key for", title: "Autocorrect: Set API Key" }
+      const profiles = cfg().profiles;
+      const pick = await vscode.window.showQuickPick(
+        profiles.map((p) => ({ label: p.label, description: p.provider, profile: p })),
+        { placeHolder: "Profile to set API key for", title: "Autocorrect: Set API Key" }
       );
-      if (!provider) {
+      if (!pick) {
         return;
       }
       const key = await vscode.window.showInputBox({
-        prompt: `API key for ${provider} (stored in VS Code secret storage)`,
+        prompt: `API key for ${pick.profile.label} (secret storage)`,
         password: true,
         ignoreFocusOut: true,
       });
       if (key === undefined) {
         return;
       }
+      const secretKey = secretKeyForProfile(pick.profile.id, pick.profile.provider);
       if (key === "") {
-        await context.secrets.delete(secretKeyFor(provider));
-        vscode.window.setStatusBarMessage(`Autocorrect: cleared API key for ${provider}`, 3000);
+        await context.secrets.delete(secretKey);
+        vscode.window.setStatusBarMessage(`Autocorrect: cleared key for ${pick.profile.label}`, 3000);
       } else {
-        await context.secrets.store(secretKeyFor(provider), key);
-        vscode.window.setStatusBarMessage(`Autocorrect: API key saved for ${provider}`, 3000);
+        await context.secrets.store(secretKey, key);
+        vscode.window.setStatusBarMessage(`Autocorrect: key saved for ${pick.profile.label}`, 3000);
       }
     }),
 
@@ -105,6 +125,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("autocorrect.menuKeyS", () => modeController.menuPick("s")),
     vscode.commands.registerCommand("autocorrect.menuKeyQ", () => modeController.menuPick("q")),
+    vscode.commands.registerCommand("autocorrect.menuKeyShiftQ", () =>
+      modeController.menuReviewQueue(true)
+    ),
     vscode.commands.registerCommand("autocorrect.menuKeyC", () => modeController.menuPick("c")),
     vscode.commands.registerCommand("autocorrect.menuKeyShiftC", () =>
       modeController.menuStageLine()
@@ -127,6 +150,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("autocorrect.stagedCancel", () =>
       modeController.stagedCancel()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedToggleTier1", () =>
+      modeController.stagedToggleTier(1)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedToggleTier2", () =>
+      modeController.stagedToggleTier(2)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedToggleTier3", () =>
+      modeController.stagedToggleTier(3)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedToggleTier4", () =>
+      modeController.stagedToggleTier(4)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedToggleTier5", () =>
+      modeController.stagedToggleTier(5)
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedCycleProfile", () =>
+      modeController.stagedCycleProfile()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedPickProfile", () =>
+      modeController.stagedPickProfile()
     ),
 
     vscode.commands.registerCommand("autocorrect.captureMoveUp", () =>
@@ -167,7 +211,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const result = await stagedExecutor.run(
         editor,
         range,
-        { op: "fix", contextNote: "" },
+        {
+          op: "fix",
+          contextNote: "",
+          tiers: cfg().defaultTiers,
+          profileId: activeLlmProfile().id,
+        },
         false
       );
       if (result.ok) {
@@ -181,16 +230,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       commenter.cavemanComment(false)
     ),
 
-    vscode.commands.registerCommand("autocorrect.reviewQueuedFixes", () => fixQueue.review()),
+    vscode.commands.registerCommand("autocorrect.reviewQueuedFixes", () =>
+      fixQueue.reviewAllProfiles()
+    ),
     vscode.commands.registerCommand("autocorrect.applyQueuedFixes", () => fixQueue.applyAll()),
     vscode.commands.registerCommand("autocorrect.clearQueuedFixes", () => fixQueue.clear()),
     vscode.commands.registerCommand("autocorrect.toggleQueueMode", async () => {
       const next = !cfg().queueEnabled;
       await setQueueEnabled(next);
+      statusBar.refresh();
       vscode.window.setStatusBarMessage(
         next
-          ? "Autocorrect: Enter-fixes queue ON"
-          : "Autocorrect: Enter-fixes queue OFF",
+          ? "Autocorrect: review before apply ON"
+          : "Autocorrect: review before apply OFF",
+        4000
+      );
+    }),
+
+    vscode.commands.registerCommand("autocorrect.toggleDisableAutocorrect", async () => {
+      const next = !cfg().disableAutocorrect;
+      await setDisableAutocorrect(next);
+      statusBar.refresh();
+      vscode.window.setStatusBarMessage(
+        next
+          ? "Autocorrect: Enter fixes OFF — fix on demand with C/A or staged keys"
+          : "Autocorrect: Enter fixes ON",
         4000
       );
     })

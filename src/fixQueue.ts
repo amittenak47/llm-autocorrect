@@ -1,9 +1,12 @@
 import * as vscode from "vscode";
+import { activeLlmProfile, cfg } from "./config";
 import { shiftLine } from "./blockMath";
+import { decorationLineNumbers } from "./queueDeco";
+import { profileColor } from "./profiles";
 import { StagedOp } from "./stagedSession";
 import { StatusBar } from "./statusBar";
 
-interface QueuedFix {
+export interface QueuedFix {
   uri: string;
   fileName: string;
   label: string;
@@ -11,6 +14,7 @@ interface QueuedFix {
   corrected: string;
   op: StagedOp;
   contextNote: string;
+  profileId: string;
   line: number;
   endLine?: number;
 }
@@ -21,22 +25,30 @@ interface QueueQuickPickItem extends vscode.QuickPickItem {
 
 export class FixQueue implements vscode.Disposable {
   private fixes: QueuedFix[] = [];
-  private readonly decoration: vscode.TextEditorDecorationType;
+  private readonly lineDecoration: vscode.TextEditorDecorationType;
+  private readonly gutterDecoration: vscode.TextEditorDecorationType;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly statusBar: StatusBar,
     private readonly output: vscode.OutputChannel
   ) {
-    this.decoration = vscode.window.createTextEditorDecorationType({
+    this.lineDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
-      backgroundColor: "rgba(255, 200, 100, 0.10)",
-      border: "1px dashed rgba(255, 200, 100, 0.45)",
-      overviewRulerColor: "rgba(255, 200, 100, 0.8)",
+      backgroundColor: "rgba(255, 200, 100, 0.12)",
+      borderWidth: "0 0 0 3px",
+      borderStyle: "dashed",
+      borderColor: "rgba(255, 200, 100, 0.65)",
+      overviewRulerColor: "rgba(255, 200, 100, 0.85)",
       overviewRulerLane: vscode.OverviewRulerLane.Right,
     });
+    this.gutterDecoration = vscode.window.createTextEditorDecorationType({
+      isWholeLine: true,
+      backgroundColor: "rgba(255, 200, 100, 0.06)",
+    });
     this.disposables.push(
-      this.decoration,
+      this.lineDecoration,
+      this.gutterDecoration,
       vscode.workspace.onDidChangeTextDocument((e) => this.onDocChange(e)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.redecorateAll()),
       vscode.workspace.onDidCloseTextDocument((doc) => this.dropFor(doc.uri))
@@ -47,8 +59,32 @@ export class FixQueue implements vscode.Disposable {
     return this.fixes.length;
   }
 
-  addLine(doc: vscode.TextDocument, line: number, original: string, corrected: string): void {
-    this.add(doc, line, line, original, corrected, `line ${line + 1}`, "fix", "");
+  countByProfile(): Map<string, number> {
+    const m = new Map<string, number>();
+    for (const f of this.fixes) {
+      m.set(f.profileId, (m.get(f.profileId) ?? 0) + 1);
+    }
+    return m;
+  }
+
+  addLine(
+    doc: vscode.TextDocument,
+    line: number,
+    original: string,
+    corrected: string,
+    profileId?: string
+  ): void {
+    this.add(
+      doc,
+      line,
+      line,
+      original,
+      corrected,
+      `line ${line + 1}`,
+      "fix",
+      "",
+      profileId ?? activeLlmProfile().id
+    );
   }
 
   addBlock(
@@ -59,9 +95,20 @@ export class FixQueue implements vscode.Disposable {
     corrected: string,
     label: string,
     op: StagedOp,
-    contextNote: string
+    contextNote: string,
+    profileId?: string
   ): void {
-    this.add(doc, startLine, endLine, original, corrected, label, op, contextNote);
+    this.add(
+      doc,
+      startLine,
+      endLine,
+      original,
+      corrected,
+      label,
+      op,
+      contextNote,
+      profileId ?? activeLlmProfile().id
+    );
   }
 
   private add(
@@ -72,11 +119,16 @@ export class FixQueue implements vscode.Disposable {
     corrected: string,
     label: string,
     op: StagedOp,
-    contextNote: string
+    contextNote: string,
+    profileId: string
   ): void {
     const uri = doc.uri.toString();
     const existing = this.fixes.find(
-      (f) => f.uri === uri && f.line === startLine && f.endLine === endLine
+      (f) =>
+        f.uri === uri &&
+        f.line === startLine &&
+        f.endLine === (endLine === startLine ? undefined : endLine) &&
+        f.profileId === profileId
     );
     const entry: QueuedFix = {
       uri,
@@ -86,6 +138,7 @@ export class FixQueue implements vscode.Disposable {
       corrected,
       op,
       contextNote,
+      profileId,
       line: startLine,
       endLine: endLine === startLine ? undefined : endLine,
     };
@@ -94,38 +147,58 @@ export class FixQueue implements vscode.Disposable {
     } else {
       this.fixes.push(entry);
     }
-    this.output.appendLine(`[queue] ${doc.fileName} queued ${label} (${this.fixes.length} pending)`);
+    this.output.appendLine(
+      `[queue] ${doc.fileName} [${profileId}] queued ${label} (${this.fixes.length} pending)`
+    );
     this.sync();
   }
 
-  async review(): Promise<void> {
-    if (this.fixes.length === 0) {
+  async review(profileFilter?: string): Promise<void> {
+    const pool = profileFilter
+      ? this.fixes.filter((f) => f.profileId === profileFilter)
+      : [...this.fixes];
+    if (pool.length === 0) {
       vscode.window.setStatusBarMessage("Autocorrect: queue empty", 3000);
       return;
     }
-    const items: QueueQuickPickItem[] = this.fixes.map((f) => ({
-      label: `$(edit) ${shortName(f.fileName)} — ${f.op}`,
-      description: queueDescription(f),
-      detail: f.contextNote || undefined,
-      picked: true,
-      fix: f,
-    }));
+    const profiles = cfg().profiles;
+    const items: QueueQuickPickItem[] = pool.map((f) => {
+      const pl = profiles.find((p) => p.id === f.profileId);
+      return {
+        label: `$(edit) ${shortName(f.fileName)} — ${f.op} [${pl?.label ?? f.profileId}]`,
+        description: queueDescription(f),
+        detail: f.contextNote || undefined,
+        picked: true,
+        fix: f,
+      };
+    });
+    const title = profileFilter
+      ? `Autocorrect: queued fixes (${profileFilter})`
+      : "Autocorrect: queued fixes (all profiles)";
     const chosen = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      title: "Autocorrect: queued fixes",
+      title,
       placeHolder: "Enter applies checked; unchecked are discarded; Esc keeps queue",
     });
     if (!chosen) {
       return;
     }
     const keep = new Set(chosen.map((i) => i.fix));
-    const rejected = this.fixes.filter((f) => !keep.has(f));
+    const rejected = pool.filter((f) => !keep.has(f));
     if (rejected.length > 0) {
       this.output.appendLine(`[queue] discarded ${rejected.length} item(s) after review`);
     }
-    this.fixes = this.fixes.filter((f) => keep.has(f));
+    this.fixes = this.fixes.filter((f) => !pool.includes(f) || keep.has(f));
     this.sync();
     await this.apply([...keep]);
+  }
+
+  async reviewActiveProfile(): Promise<void> {
+    await this.review(activeLlmProfile().id);
+  }
+
+  async reviewAllProfiles(): Promise<void> {
+    await this.review(undefined);
   }
 
   async applyAll(): Promise<void> {
@@ -183,10 +256,7 @@ export class FixQueue implements vscode.Disposable {
     if (f.endLine === undefined) {
       return new vscode.Range(f.line, 0, f.line, doc.lineAt(f.line).text.length);
     }
-    return new vscode.Range(
-      f.line, 0,
-      end, doc.lineAt(end).text.length
-    );
+    return new vscode.Range(f.line, 0, end, doc.lineAt(end).text.length);
   }
 
   private onDocChange(e: vscode.TextDocumentChangeEvent): void {
@@ -205,7 +275,12 @@ export class FixQueue implements vscode.Disposable {
           }
           continue;
         }
-        const shifted = shiftLine(f.line, change.range.start.line, change.range.end.line, addedLines);
+        const shifted = shiftLine(
+          f.line,
+          change.range.start.line,
+          change.range.end.line,
+          addedLines
+        );
         f.line = shifted.line;
         if (shifted.touched) {
           touched.add(f);
@@ -240,24 +315,36 @@ export class FixQueue implements vscode.Disposable {
   }
 
   private sync(): void {
-    this.statusBar.setQueueCount(this.fixes.length);
+    this.statusBar.setQueueSummary(this.fixes.length, this.countByProfile());
     this.redecorateAll();
   }
 
   private redecorateAll(): void {
+    const profiles = cfg().profiles;
     for (const editor of vscode.window.visibleTextEditors) {
       const uri = editor.document.uri.toString();
-      const ranges = this.fixes
-        .filter((f) => f.uri === uri && f.line < editor.document.lineCount)
-        .map((f) => {
-          const end = f.endLine ?? f.line;
-          const doc = editor.document;
-          if (end >= doc.lineCount) {
-            return new vscode.Range(f.line, 0, f.line, 0);
+      const doc = editor.document;
+      const lineRanges: vscode.Range[] = [];
+      const gutterRanges: vscode.Range[] = [];
+      for (const f of this.fixes.filter((x) => x.uri === uri && x.line < doc.lineCount)) {
+        const lineNums = decorationLineNumbers(f);
+        const color = profileColor(
+          profiles.find((p) => p.id === f.profileId) ?? profiles[0],
+          profiles.findIndex((p) => p.id === f.profileId)
+        );
+        for (const ln of lineNums) {
+          if (ln < doc.lineCount) {
+            lineRanges.push(new vscode.Range(ln, 0, ln, Math.max(1, doc.lineAt(ln).text.length)));
           }
-          return new vscode.Range(f.line, 0, end, doc.lineAt(end).text.length);
-        });
-      editor.setDecorations(this.decoration, ranges);
+        }
+        if (lineNums.length > 0) {
+          const end = lineNums[lineNums.length - 1];
+          gutterRanges.push(new vscode.Range(lineNums[0], 0, end, 0));
+        }
+        void color;
+      }
+      editor.setDecorations(this.lineDecoration, lineRanges);
+      editor.setDecorations(this.gutterDecoration, gutterRanges);
     }
   }
 

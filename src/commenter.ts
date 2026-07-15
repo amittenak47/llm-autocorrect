@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { BlockCapture } from "./blockCapture";
 import { blockLineRange } from "./blockApply";
-import { cfg } from "./config";
+import { activeLlmProfile, cfg } from "./config";
 import { PROFILES } from "./languages";
 import { StagedExecutor } from "./stagedExecutor";
 import { StagedOp } from "./stagedSession";
@@ -66,7 +66,12 @@ export class Commenter {
     const result = await this.stagedExecutor.run(
       editor,
       range,
-      { op, contextNote: "" },
+      {
+        op,
+        contextNote: "",
+        tiers: cfg().defaultTiers,
+        profileId: activeLlmProfile().id,
+      },
       queue
     );
     if (result.ok) {

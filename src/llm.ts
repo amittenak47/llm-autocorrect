@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { cfg } from "./config";
+import { activeLlmProfile } from "./config";
 import { capMaxTokens } from "./promptLimits";
+import { LlmProfileConfig } from "./profiles";
 import { stripFences } from "./textUtils";
 
 export { stripFences } from "./textUtils";
@@ -16,59 +17,78 @@ const PROVIDER_DEFAULTS: Record<string, { model: string }> = {
   groq: { model: "llama-3.1-8b-instant" },
   gemini: { model: "gemini-2.5-flash-lite" },
   anthropic: { model: "claude-haiku-4-5-20251001" },
-  "openai-compatible": { model: "" },
+  "openai-compatible": { model: "local" },
 };
 
 export function secretKeyFor(provider: string): string {
   return `autocorrect.apiKey.${provider}`;
 }
 
+export function secretKeyForProfile(profileId: string, provider: string): string {
+  return `autocorrect.apiKey.${profileId}`;
+}
+
 export class LlmClient {
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
-  /** Returns the model's text response, or throws on transport/API errors. */
+  /** Legacy single-provider path. */
   async complete(req: LlmRequest): Promise<string> {
-    const { provider, model: configuredModel, baseUrl, timeoutMs } = cfg();
-    const model = configuredModel || PROVIDER_DEFAULTS[provider]?.model;
+    const profile = activeLlmProfile();
+    return this.completeForProfile(profile, req);
+  }
+
+  async completeForProfile(profile: LlmProfileConfig, req: LlmRequest): Promise<string> {
+    const model = profile.model || PROVIDER_DEFAULTS[profile.provider]?.model;
     if (!model) {
-      throw new Error(`No model configured for provider "${provider}" — set autocorrect.model.`);
+      throw new Error(
+        `No model configured for profile "${profile.id}" — set model in autocorrect.profiles.`
+      );
     }
-    const apiKey = await this.secrets.get(secretKeyFor(provider));
-    if (!apiKey && provider !== "openai-compatible") {
-      throw new Error(`No API key for ${provider}. Run "Autocorrect: Set API Key".`);
+    const apiKey =
+      (await this.secrets.get(secretKeyForProfile(profile.id, profile.provider))) ??
+      (await this.secrets.get(secretKeyFor(profile.provider)));
+    if (!apiKey && profile.provider !== "openai-compatible") {
+      throw new Error(`No API key for profile "${profile.id}". Run "Autocorrect: Set API Key".`);
     }
 
-    // Combine the caller's abort signal with the timeout.
-    const signal = AbortSignal.any([req.signal, AbortSignal.timeout(timeoutMs)]);
+    const maxTokens = capMaxTokens(profile.provider, req.maxTokens, req.system, req.user);
 
-    const maxTokens = capMaxTokens(provider, req.maxTokens, req.system, req.user);
-
-    switch (provider) {
+    switch (profile.provider) {
       case "groq":
         return this.openAiChat(
           "https://api.groq.com/openai/v1/chat/completions",
-          apiKey!, model, { ...req, maxTokens }, signal
+          apiKey!,
+          model,
+          { ...req, maxTokens },
+          req.signal
         );
       case "openai-compatible": {
-        if (!baseUrl) {
-          throw new Error("Set autocorrect.baseUrl for the openai-compatible provider.");
+        if (!profile.baseUrl) {
+          throw new Error(`Profile "${profile.id}" needs baseUrl (e.g. http://127.0.0.1:8080/v1).`);
         }
         return this.openAiChat(
-          `${baseUrl.replace(/\/+$/, "")}/chat/completions`,
-          apiKey ?? "", model, { ...req, maxTokens }, signal
+          `${profile.baseUrl.replace(/\/+$/, "")}/chat/completions`,
+          apiKey ?? "",
+          model,
+          { ...req, maxTokens },
+          req.signal
         );
       }
       case "gemini":
-        return this.gemini(apiKey!, model, { ...req, maxTokens }, signal);
+        return this.gemini(apiKey!, model, { ...req, maxTokens }, req.signal);
       case "anthropic":
-        return this.anthropic(apiKey!, model, { ...req, maxTokens }, signal);
+        return this.anthropic(apiKey!, model, { ...req, maxTokens }, req.signal);
       default:
-        throw new Error(`Unknown provider "${provider}".`);
+        throw new Error(`Unknown provider "${profile.provider}" on profile "${profile.id}".`);
     }
   }
 
   private async openAiChat(
-    url: string, apiKey: string, model: string, req: LlmRequest, signal: AbortSignal
+    url: string,
+    apiKey: string,
+    model: string,
+    req: LlmRequest,
+    signal: AbortSignal
   ): Promise<string> {
     const res = await fetch(url, {
       method: "POST",
@@ -95,7 +115,10 @@ export class LlmClient {
   }
 
   private async gemini(
-    apiKey: string, model: string, req: LlmRequest, signal: AbortSignal
+    apiKey: string,
+    model: string,
+    req: LlmRequest,
+    signal: AbortSignal
   ): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const res = await fetch(url, {
@@ -117,7 +140,10 @@ export class LlmClient {
   }
 
   private async anthropic(
-    apiKey: string, model: string, req: LlmRequest, signal: AbortSignal
+    apiKey: string,
+    model: string,
+    req: LlmRequest,
+    signal: AbortSignal
   ): Promise<string> {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

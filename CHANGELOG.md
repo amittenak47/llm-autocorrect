@@ -2,6 +2,12 @@
 
 All notable user-facing changes to LLM Autocorrect are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **`autocorrect.disableAutocorrect`** — turn off Enter-triggered line fixes while keeping manual fixes, staged **Shift+E** enqueue, and queue review.
+
 ## [0.2.0] - 2026-07-15
 
 ### Added

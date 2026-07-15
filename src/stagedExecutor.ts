@@ -1,12 +1,16 @@
 import * as vscode from "vscode";
 import { applyBlockText, blockLineRange } from "./blockApply";
 import { blockMaxTokens } from "./blockMath";
-import { cfg } from "./config";
+import { activeLlmProfile, cfg } from "./config";
+import {
+  ContextAssemblerService,
+  formatBlockWithContext,
+} from "./contextAssembler";
 import { shouldFixRange } from "./diagnosticGate";
 import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { isCommentOrBlank, LanguageProfile, PROFILES } from "./languages";
-import { LlmClient } from "./llm";
+import { LlmRouter } from "./llmRouter";
 import { estimateTokens } from "./promptLimits";
 import { blockFixUserMessage } from "./promptContext";
 import { StagedAttributes, StagedOp } from "./stagedSession";
@@ -20,7 +24,8 @@ export interface ExecuteResult {
 
 export class StagedExecutor {
   constructor(
-    private readonly llm: LlmClient,
+    private readonly router: LlmRouter,
+    private readonly contextAsm: ContextAssemblerService,
     private readonly queue: FixQueue,
     private readonly statusBar: StatusBar,
     private readonly flash: Flash,
@@ -33,8 +38,8 @@ export class StagedExecutor {
     attrs: StagedAttributes,
     queue: boolean
   ): Promise<ExecuteResult> {
-    const profile = PROFILES[editor.document.languageId];
-    if (!profile || !cfg().languages.includes(editor.document.languageId)) {
+    const langProfile = PROFILES[editor.document.languageId];
+    if (!langProfile || !cfg().languages.includes(editor.document.languageId)) {
       vscode.window.setStatusBarMessage(
         `Autocorrect: unsupported language "${editor.document.languageId}"`,
         4000
@@ -50,9 +55,7 @@ export class StagedExecutor {
       return { ok: false };
     }
 
-    if (
-      !shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output)
-    ) {
+    if (!shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output)) {
       vscode.window.setStatusBarMessage(
         "Autocorrect: no LSP error in block — skipped (fix.requireDiagnostic)",
         5000
@@ -60,26 +63,34 @@ export class StagedExecutor {
       return { ok: false };
     }
 
+    const llmProfile =
+      this.router.profileById(attrs.profileId) ?? this.router.activeProfile;
+    const assembled = this.contextAsm.assembleBlock(editor, blockRange, attrs.tiers, llmProfile);
+    const codePayload = formatBlockWithContext(text, assembled.supplementary);
+    const userMsg = blockFixUserMessage(codePayload, attrs.contextNote);
+
     const lines = blockRange.end.line - blockRange.start.line + 1;
-    const flagStr = attrs.contextNote ? ` · ${attrs.op} · ctx` : ` · ${attrs.op}`;
+    const tierStr = attrs.tiers.nearby ? "" : " · minimal ctx";
     vscode.window.setStatusBarMessage(
-      `Autocorrect: ${queue ? "queuing" : "sending"} ${lines} line(s)${flagStr} (~${estimateTokens(text)} tok)…`,
+      `Autocorrect: ${queue ? "queuing" : "sending"} ${lines}L [${llmProfile.label}]${tierStr} (~${assembled.estimatedTokens} tok)…`,
       6000
     );
 
     this.output.appendLine(
-      `[staged] ${attrs.op} ${doc.fileName}:${blockRange.start.line + 1}-${blockRange.end.line + 1}` +
+      `[staged] ${attrs.op} [${llmProfile.id}] ${doc.fileName}:${blockRange.start.line + 1}-${blockRange.end.line + 1}` +
+        ` tiers=${assembled.includedTiers.join(",")}` +
         (attrs.contextNote ? ` ctx=${JSON.stringify(attrs.contextNote)}` : "")
     );
 
     let response: string;
     try {
       response = await this.statusBar.withBusy(() =>
-        this.llm.complete({
-          system: this.systemPrompt(attrs.op, profile),
-          user: blockFixUserMessage(text, attrs.contextNote),
+        this.router.complete({
+          system: this.systemPrompt(attrs.op, langProfile),
+          user: userMsg,
           maxTokens: blockMaxTokens(text),
           signal: new AbortController().signal,
+          profileId: llmProfile.id,
         })
       );
     } catch (err) {
@@ -103,7 +114,7 @@ export class StagedExecutor {
       vscode.window.setStatusBarMessage("Autocorrect: caveman changed line count — skipped", 5000);
       return { ok: false };
     }
-    if (attrs.op === "docs" && !this.docsPreserveCode(text, result, profile)) {
+    if (attrs.op === "docs" && !this.docsPreserveCode(text, result, langProfile)) {
       this.output.appendLine("[staged] rejected docs output — code altered or class invented");
       vscode.window.setStatusBarMessage("Autocorrect: docs altered code — skipped", 5000);
       return { ok: false };
@@ -131,9 +142,13 @@ export class StagedExecutor {
         result,
         queueLabel,
         attrs.op,
-        attrs.contextNote
+        attrs.contextNote,
+        llmProfile.id
       );
-      vscode.window.setStatusBarMessage(`Autocorrect: queued [${attrs.op}] — Q to review`, 5000);
+      vscode.window.setStatusBarMessage(
+        `Autocorrect: queued [${llmProfile.label}] — Q to review`,
+        5000
+      );
       return { ok: true, queued: true };
     }
 
@@ -143,7 +158,12 @@ export class StagedExecutor {
     if (applied) {
       this.flash.show(
         editor,
-        new vscode.Range(blockRange.start.line, 0, blockRange.end.line + Math.max(0, outLines - inLines), 0)
+        new vscode.Range(
+          blockRange.start.line,
+          0,
+          blockRange.end.line + Math.max(0, outLines - inLines),
+          0
+        )
       );
       vscode.window.setStatusBarMessage(`Autocorrect: ${attrs.op} applied`, 3000);
       return { ok: true };
@@ -152,7 +172,6 @@ export class StagedExecutor {
   }
 
   private systemPrompt(op: StagedOp, profile: LanguageProfile): string {
-    const prefix = profile.lineCommentPrefixes[0];
     if (op === "caveman") {
       return (
         `You add caveman-style comments to ${profile.name} code: ultra-short inline comments ` +
