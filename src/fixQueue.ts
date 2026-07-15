@@ -90,6 +90,9 @@ export class FixQueue implements vscode.Disposable {
     if (rejected.length > 0) {
       this.output.appendLine(`[queue] discarded ${rejected.length} fix(es) after review`);
     }
+    // Drop unchecked fixes from the queue; apply only what the user kept.
+    this.fixes = this.fixes.filter((f) => keep.has(f));
+    this.sync();
     await this.apply([...keep]);
   }
 

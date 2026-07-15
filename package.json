@@ -73,54 +73,18 @@
       {
         "command": "autocorrect.toggleQueueMode",
         "title": "Autocorrect: Toggle Queued Fix Mode"
+      },
+      {
+        "command": "autocorrect.showMenu",
+        "title": "Autocorrect: Command Menu"
       }
     ],
     "keybindings": [
       {
-        "command": "autocorrect.correctBlock",
-        "key": "ctrl+alt+a b",
-        "mac": "cmd+alt+a b",
+        "command": "autocorrect.showMenu",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
         "when": "editorTextFocus"
-      },
-      {
-        "command": "autocorrect.startBlockCapture",
-        "key": "ctrl+alt+a s",
-        "mac": "cmd+alt+a s",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "autocorrect.endBlockCapture",
-        "key": "ctrl+alt+a e",
-        "mac": "cmd+alt+a e",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "autocorrect.cancelBlockCapture",
-        "key": "ctrl+alt+a escape",
-        "mac": "cmd+alt+a escape",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "autocorrect.documentBlock",
-        "key": "ctrl+alt+a d",
-        "mac": "cmd+alt+a d",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "autocorrect.cavemanComment",
-        "key": "ctrl+alt+a c",
-        "mac": "cmd+alt+a c",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "autocorrect.reviewQueuedFixes",
-        "key": "ctrl+alt+a q",
-        "mac": "cmd+alt+a q"
-      },
-      {
-        "command": "autocorrect.applyQueuedFixes",
-        "key": "ctrl+alt+a enter",
-        "mac": "cmd+alt+a enter"
       }
     ],
     "configuration": {
@@ -205,7 +169,7 @@
         "autocorrect.queue.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Queue line fixes for review instead of applying them immediately on Enter. Review with 'Autocorrect: Review Queued Fixes' (Ctrl+Alt+A Q) or apply all with Ctrl+Alt+A Enter."
+          "description": "Queue line fixes for review instead of applying them immediately on Enter. Review with 'Autocorrect: Review Queued Fixes' or /queue in the command menu."
         }
       }
     }

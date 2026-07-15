@@ -81,33 +81,38 @@ Set explicitly if you want:
 
 Set the provider in settings: `autocorrect.provider`.
 
-## Commands & hotkeys
+## Commands
 
-All hotkeys share the chord prefix **`Ctrl+Alt+A`** (**`Cmd+Alt+A`** on macOS): press the prefix, release, then press the second key.
+**Fastest path:** **`Ctrl+Shift+A`** (**`Cmd+Shift+A`** on macOS) → **Autocorrect: Command Menu** — a filterable picker with slash-style names (`/block`, `/caveman`, `/queue`, …). Same idea as typing `/commands` in chat, but nothing is written into your file.
 
-| Command | Hotkey | What it does |
+You can also use the **Command Palette** (`Ctrl+Shift+P`) and type `Autocorrect:`.
+
+| Command | Menu alias | What it does |
 | --- | --- | --- |
+| `Autocorrect: Command Menu` | — | Open the slash-style command picker (`Ctrl+Shift+A`) |
 | `Autocorrect: Toggle On/Off` | — | Turn the extension on or off (or click the status bar item) |
 | `Autocorrect: Set API Key` | — | Save or clear your provider API key |
-| `Autocorrect: Correct Selected Line` | — | Fix one selected line immediately (no Enter needed) |
-| `Autocorrect: Translate Selection to Current File's Language` | — | Convert a selection to the file's language |
-| `Autocorrect: Correct Selected Block` | `Ctrl+Alt+A B` | Fix the selected multi-line block (reverse capture: the selection is the block) |
-| `Autocorrect: Start Block Capture` | `Ctrl+Alt+A S` | Drop a start mark and highlight everything you type from here |
-| `Autocorrect: End Block Capture & Correct` | `Ctrl+Alt+A E` | Send the captured block (start mark → cursor) for correction |
-| `Autocorrect: Cancel Block Capture` | `Ctrl+Alt+A Escape` | Abandon the capture without sending anything |
-| `Autocorrect: Document Selection / Previous Line` | `Ctrl+Alt+A D` | Add docstrings/comments to the selection, captured block, or previous line |
-| `Autocorrect: Caveman Comments` | `Ctrl+Alt+A C` | Ultra-short inline comments (`# get user`) for the same targets |
-| `Autocorrect: Review Queued Fixes` | `Ctrl+Alt+A Q` | Open the queue: check fixes to apply, uncheck to discard |
-| `Autocorrect: Apply All Queued Fixes` | `Ctrl+Alt+A Enter` | Apply everything in the queue |
-| `Autocorrect: Clear Queued Fixes` | — | Empty the queue without applying |
-| `Autocorrect: Toggle Queued Fix Mode` | — | Switch between apply-on-Enter and queue-for-review |
+| `Autocorrect: Correct Selected Line` | `/line` | Fix one selected line immediately (no Enter needed) |
+| `Autocorrect: Translate Selection` | `/translate` | Convert a selection to the file's language |
+| `Autocorrect: Correct Selected Block` | `/block` | Fix the selected multi-line block (reverse capture) |
+| `Autocorrect: Start Block Capture` | `/capture` | Drop a start mark and highlight everything you type from here |
+| `Autocorrect: End Block Capture & Correct` | `/capture-end` | Send the captured block for correction |
+| `Autocorrect: Cancel Block Capture` | `/capture-cancel` | Abandon the capture without sending |
+| `Autocorrect: Document Selection / Previous Line` | `/doc` | Docstrings/comments for selection, capture, or previous line |
+| `Autocorrect: Caveman Comments` | `/caveman` | Ultra-short inline comments (`# get user`) |
+| `Autocorrect: Review Queued Fixes` | `/queue` | Review queue: checked = apply, unchecked = discard |
+| `Autocorrect: Apply All Queued Fixes` | `/queue-apply` | Apply everything in the queue |
+| `Autocorrect: Clear Queued Fixes` | `/queue-clear` | Empty the queue without applying |
+| `Autocorrect: Toggle Queued Fix Mode` | `/queue-toggle` | Switch between apply-on-Enter and queue-for-review |
+
+Rebind **`autocorrect.showMenu`** in Keyboard Shortcuts if `Ctrl+Shift+A` conflicts with something else.
 
 ## Block capture
 
 Two ways to define exactly what gets sent to the LLM before any request goes out — no popup window, the block lives in your editor:
 
-- **Reverse** — select the code, hit `Ctrl+Alt+A B`. The native selection is the block.
-- **Advance** — hit `Ctrl+Alt+A S`, type; a faint green dashed highlight tracks the block from the start mark to your cursor. Hit `Ctrl+Alt+A E` to send it (or `Ctrl+Alt+A Escape` to cancel).
+- **Reverse** — select the code, run **`/block`** (or `Autocorrect: Correct Selected Block`). The native selection is the block.
+- **Advance** — run **`/capture`**, type; a faint green dashed highlight tracks the block from the start mark to your cursor. Run **`/capture-end`** to send it (or **`/capture-cancel`** to cancel).
 
 Before anything is sent you get a confirmation with the line count and a token estimate (disable with `autocorrect.block.confirmBeforeSend: false`). Whole lines are sent — what you saw highlighted is what goes out.
 
@@ -115,15 +120,15 @@ Before anything is sent you get a confirmation with the line count and a token e
 
 Both commands target, in priority order: your **selection**, else the **block being captured**, else the **previous non-blank line** above the cursor.
 
-- **Document** (`Ctrl+Alt+A D`) — proper docstrings for functions/classes plus brief comments; the code itself is never changed.
-- **Caveman** (`Ctrl+Alt+A C`) — ultra-short inline comments appended to lines that do real work (`# get user`, `// loop nums`). If the model changes the line structure, nothing is applied.
+- **Document** (`/doc`) — proper docstrings for functions/classes plus brief comments; the code itself is never changed.
+- **Caveman** (`/caveman`) — ultra-short inline comments appended to lines that do real work (`# get user`, `// loop nums`). If the model changes the line structure, nothing is applied.
 
 ## Queued fixes
 
 Set `autocorrect.queue.enabled: true` (or run `Autocorrect: Toggle Queued Fix Mode`) and Enter-fixes are **staged instead of applied**: the line gets a faint amber highlight, the status bar shows `(N queued)`, and nothing changes until you say so.
 
-- `Ctrl+Alt+A Q` opens the review list — check the fixes you want, uncheck to discard, Esc keeps the queue untouched.
-- `Ctrl+Alt+A Enter` applies everything.
+- **`/queue`** opens the review list — check the fixes you want, uncheck to discard, Esc keeps the queue untouched.
+- **`/queue-apply`** applies everything.
 - Queued line numbers follow your edits; if you rewrite a queued line yourself, its stale fix is dropped automatically. Manual `Correct Selected Line` still applies immediately.
 
 ## Settings

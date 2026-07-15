@@ -37,6 +37,7 @@ export class BlockCapture implements vscode.Disposable {
     this.disposables.push(
       this.captureDecoration,
       vscode.window.onDidChangeTextEditorSelection((e) => this.onSelectionChange(e)),
+      vscode.workspace.onDidChangeTextDocument((e) => this.onDocChange(e)),
       vscode.workspace.onDidCloseTextDocument((doc) => {
         if (this.recording && doc.uri.toString() === this.captureDocUri) {
           this.reset();
@@ -156,7 +157,23 @@ export class BlockCapture implements vscode.Disposable {
     if (!this.recording || e.textEditor.document.uri.toString() !== this.captureDocUri) {
       return;
     }
-    e.textEditor.setDecorations(this.captureDecoration, [this.captureRange(e.textEditor)]);
+    this.refreshDecoration(e.textEditor);
+  }
+
+  private onDocChange(e: vscode.TextDocumentChangeEvent): void {
+    if (!this.recording || e.document.uri.toString() !== this.captureDocUri) {
+      return;
+    }
+    const editor = vscode.window.visibleTextEditors.find(
+      (ed) => ed.document.uri.toString() === this.captureDocUri
+    );
+    if (editor) {
+      this.refreshDecoration(editor);
+    }
+  }
+
+  private refreshDecoration(editor: vscode.TextEditor): void {
+    editor.setDecorations(this.captureDecoration, [this.captureRange(editor)]);
   }
 
   /** Whole lines covered by the range — matches what the whole-line decoration showed. */

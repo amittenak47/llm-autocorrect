@@ -6,6 +6,7 @@ import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { LineCorrector } from "./lineCorrector";
 import { LlmClient, secretKeyFor } from "./llm";
+import { showCommandMenu } from "./commandMenu";
 import { PasteTranslator } from "./pasteTranslator";
 import { StatusBar } from "./statusBar";
 
@@ -72,6 +73,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("autocorrect.correctSelection", () =>
       lineCorrector.correctSelection()
     ),
+
+    vscode.commands.registerCommand("autocorrect.showMenu", () => showCommandMenu()),
 
     // Block capture (reverse: selection is the block; advance: start/end recording).
     vscode.commands.registerCommand("autocorrect.correctBlock", () =>
