@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -41,6 +41,10 @@
       {
         "command": "autocorrect.clearQueuedFixes",
         "title": "Autocorrect: Clear Queued Fixes"
+      },
+      {
+        "command": "autocorrect.removeQueuedAtCursor",
+        "title": "Autocorrect: Remove or Revert Queued Change at Cursor"
       },
       {
         "command": "autocorrect.toggleQueueMode",

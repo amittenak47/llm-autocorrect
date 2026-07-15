@@ -240,6 +240,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("autocorrect.applyQueuedFixes", () => fixQueue.applyAll()),
     vscode.commands.registerCommand("autocorrect.clearQueuedFixes", () => fixQueue.clear()),
+    vscode.commands.registerCommand("autocorrect.removeQueuedAtCursor", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
+        return;
+      }
+      await fixQueue.removeAtCursor(editor);
+    }),
     vscode.commands.registerCommand("autocorrect.toggleQueueMode", async () => {
       const next = !cfg().queueEnabled;
       await setQueueEnabled(next);

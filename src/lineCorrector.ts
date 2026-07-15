@@ -271,8 +271,10 @@ export class LineCorrector implements vscode.Disposable {
     const wantsQueue = queue || (!force && cfg().queueEnabled);
     if (wantsQueue && isDeferQueueMode()) {
       const pid = profileIdOverride ?? activeLlmProfile().id;
-      this.queue.addPendingLine(doc, line, original, pid);
-      vscode.window.setStatusBarMessage("Autocorrect: task queued — Q to run", 4000);
+      const queued = await this.queue.addPendingLine(doc, line, original, pid);
+      if (queued) {
+        vscode.window.setStatusBarMessage("Autocorrect: task queued — Q to run", 4000);
+      }
       return;
     }
 
@@ -363,15 +365,19 @@ export class LineCorrector implements vscode.Disposable {
 
     // Queued mode (reviewChanges): LLM now, review proposed edit on Q.
     if (wantsQueue) {
-      this.queue.addLine(doc, line, original, corrected, llmProfile.id);
+      await this.queue.addLine(doc, line, original, corrected, llmProfile.id);
       return;
     }
 
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(doc.uri, new vscode.Range(line, 0, line, original.length), corrected);
-    const applied = await vscode.workspace.applyEdit(edit);
+    const label = `line ${line + 1}`;
+    const applied = await this.queue.applyChange(doc, line, line, original, corrected, {
+      profileId: llmProfile.id,
+      op: "fix",
+      label,
+    });
     if (applied) {
       const extra = corrected.split("\n").length - 1;
+      const firstLine = corrected.split("\n")[0];
       this.output.appendLine(
         `[line] ${doc.fileName}:${line + 1}  "${original.trim()}" -> "${firstLine.trim()}"` +
           (extra > 0 ? ` (+${extra} line(s))` : "")

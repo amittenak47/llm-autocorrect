@@ -21,7 +21,7 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-## Features (v0.2.0)
+## Features (v0.1.0)
 
 | Feature | Summary |
 | --- | --- |
@@ -35,6 +35,7 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Multi-profile LLM** | Groq, Gemini, Anthropic, local llama-server side by side. Choose profile with **M** / **Shift+M** during the modifier step (before **E** / **Shift+E**); that profile owns the request and its queue slot. |
 | **Queue mode** (`queue.mode`) | **Mutually exclusive.** **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). **Deferred batch** (`deferExecution`): enqueue stores **tasks** only (blue dotted); **Q** / **Shift+Q** run selected tasks — LLM + immediate apply, **parallel per profile** (no diff review). |
 | **Per-profile concurrency** | Each LLM profile has its own async request pool (`maxConcurrent`: default **1** localhost, **2** cloud). Deferred batch and all LLM calls share the limit — not OS threads, but independent in-flight caps per endpoint. |
+| **Region lock** | Overlapping enqueue prompts first (**Replace** / **Expand & merge** / **Revert & continue** / **Cancel**). Queue border color = LLM profile. Applied fixes live in a **revert ledger** until reverted. |
 | **Queued staged requests** | **Shift+E** enqueues (behavior depends on `queue.mode`). **Q** = current profile; **Shift+Q** = all profiles. |
 | **Review before apply (Enter)** | `queue.enabled` — Enter still autocorrects; uses the active `queue.mode` (review changes vs defer task). |
 | **Manual-only Enter** | `disableAutocorrect` — no automatic Enter fixes; call the LLM only when you use menu/staged keys. |
@@ -42,7 +43,7 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). |
 | **Local inference** | `openai-compatible` + localhost → **60s** default timeout. |
 
-See [CHANGELOG.md](CHANGELOG.md) for the full v0.2.0 release notes.
+See [CHANGELOG.md](CHANGELOG.md) for the full v0.1.0 release notes.
 
 You bring your own API key. Keys live in the editor's secret storage, not in settings files.
 
@@ -135,8 +136,7 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | Colored left border | Active LLM profile |
 | **1–5** before first staged line | Context tier toggles (inline, not line-number gutter) |
 | Modifier dot (fix / docs / caveman) | Filled circle in the **line-number gutter** and inline before the first staged line — blue fix, purple docs, orange caveman |
-| Amber dashed lines | **Checkpoint review** — queued edits ready to apply (`reviewChanges`) |
-| Blue dotted lines | **Deferred batch** — tasks waiting to run (`deferExecution`) |
+| Amber / blue dashed lines | Queued edits or tasks — **left border color = LLM profile** |
 
 Status bar shows modifiers and token estimate, e.g. `fix · @Groq free · ctx:12 · ~840tok`.
 
@@ -595,8 +595,8 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | **Log says `no LSP squiggle`** | With default `line.requireDiagnostic: true`, Enter only calls the LLM when the language server reports an error/warning on that line. Fix LSP setup (**View → Problems**), or temporarily set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor Python, see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
 | **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
 | **`already correct` / no edit** | Model returned the same line or `UNCHANGED`. Normal — no apply, but you may still have paid for the prompt. |
-| **Enter queued** | `queue.enabled: true` — Enter queues per `queue.mode`: amber = checkpoint review, blue dotted = deferred batch (tutorial 15). |
-| **Deferred batch slow or rate-limited** | Raise `maxConcurrent` on cloud profiles (e.g. Groq `3`). Keep localhost at `1`. Tasks run in parallel per profile on **Q**, not one global serial queue. |
+| **Range locked on enqueue** | Overlapping enqueue shows a modal: **Replace**, **Expand & merge** (same profile), **Revert & continue** (if an applied fix overlaps), or **Cancel**. |
+| **Remove / revert at cursor** | Command Palette → **Remove or Revert Queued Change at Cursor** — drops a queued item, or reverts a ledger entry if the buffer still matches. |
 | **Enter does nothing at all (no log)** | Likely `disableAutocorrect: true` or `line.enabled: false`. Status bar shows `(manual)` when Enter autocorrect is off. |
 
 ### Menu, staged mode, and manual fixes

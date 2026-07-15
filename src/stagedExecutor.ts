@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { applyBlockText, blockLineRange } from "./blockApply";
+import { blockLineRange } from "./blockApply";
 import { blockMaxTokens } from "./blockMath";
 import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
 import {
@@ -60,7 +60,7 @@ export class StagedExecutor {
     const queueLabel = `${attrs.op} ${blockRange.start.line + 1}-${blockRange.end.line + 1} · ${attrs.contextNote || "no ctx"}`;
 
     if (queue && isDeferQueueMode()) {
-      this.queue.addPendingBlock(
+      const queued = await this.queue.addPendingBlock(
         doc,
         blockRange.start.line,
         blockRange.end.line,
@@ -71,6 +71,9 @@ export class StagedExecutor {
         llmProfile.id,
         attrs.tiers
       );
+      if (!queued) {
+        return { ok: false };
+      }
       vscode.window.setStatusBarMessage(
         `Autocorrect: task queued [${llmProfile.label}] — Q to run`,
         5000
@@ -153,7 +156,7 @@ export class StagedExecutor {
     }
 
     if (queue) {
-      this.queue.addBlock(
+      const queued = await this.queue.addBlock(
         doc,
         blockRange.start.line,
         blockRange.end.line,
@@ -165,6 +168,9 @@ export class StagedExecutor {
         llmProfile.id,
         attrs.tiers
       );
+      if (!queued) {
+        return { ok: false };
+      }
       vscode.window.setStatusBarMessage(
         `Autocorrect: queued [${llmProfile.label}] — Q to review changes`,
         5000
@@ -172,9 +178,18 @@ export class StagedExecutor {
       return { ok: true, queued: true };
     }
 
-    const edit = new vscode.WorkspaceEdit();
-    applyBlockText(edit, doc.uri, doc, blockRange.start.line, blockRange.end.line, result);
-    const applied = await vscode.workspace.applyEdit(edit);
+    const applied = await this.queue.applyChange(
+      doc,
+      blockRange.start.line,
+      blockRange.end.line,
+      text,
+      result,
+      {
+        profileId: llmProfile.id,
+        op: attrs.op,
+        label: queueLabel,
+      }
+    );
     if (applied) {
       this.flash.show(
         editor,
