@@ -14,6 +14,8 @@ import {
 import { StageDecorations } from "./stageDecorations";
 import { StagedExecutor } from "./stagedExecutor";
 import { StagedSession } from "./stagedSession";
+import { StatusBar } from "./statusBar";
+import { tiersForOp } from "./profiles";
 
 const MENU_HINT =
   "Menu — A/C instant · Shift+A/C stage · S capture · Q review · Shift+Q all queues · Esc";
@@ -32,6 +34,7 @@ export class ModeController implements vscode.Disposable {
     private readonly router: LlmRouter,
     private readonly contextAsm: ContextAssemblerService,
     private readonly stageDeco: StageDecorations,
+    private readonly statusBar: StatusBar,
     private readonly output: vscode.OutputChannel
   ) {}
 
@@ -45,7 +48,7 @@ export class ModeController implements vscode.Disposable {
       await this.enterStagedMode(false);
     } else {
       await setModeContext(STAGED_MODE, false);
-      vscode.window.setStatusBarMessage(MENU_HINT, 12_000);
+      this.statusBar.setModeHint(MENU_HINT);
     }
     this.output.appendLine("[mode] menu ON");
   }
@@ -66,6 +69,7 @@ export class ModeController implements vscode.Disposable {
   async exitMenuMode(clearStaged = false): Promise<void> {
     await setModeContext(MENU_MODE, false);
     await setModeContext(STAGED_MODE, false);
+    this.statusBar.setModeHint(undefined);
     if (clearStaged) {
       this.blockCapture.clearStaged();
       this.staged.resetAttributes(activeLlmProfile().id);
@@ -75,6 +79,11 @@ export class ModeController implements vscode.Disposable {
 
   async exitCaptureAdjustMode(): Promise<void> {
     await setModeContext(CAPTURE_ADJUST_MODE, false);
+    if (this.blockCapture.hasStagedBlock()) {
+      this.refreshStagedHint();
+    } else {
+      this.statusBar.setModeHint(undefined);
+    }
   }
 
   private syncStageDecorations(): void {
@@ -93,10 +102,7 @@ export class ModeController implements vscode.Disposable {
         tok = this.contextAsm.estimateForBlock(editor, range, this.staged.attributes.tiers, prof);
       }
     }
-    vscode.window.setStatusBarMessage(
-      `${STAGED_HINT} [${this.staged.flagsLabel(prof.label, tok)}]`,
-      15_000
-    );
+    this.statusBar.setModeHint(`${STAGED_HINT} [${this.staged.flagsLabel(prof.label, tok)}]`);
   }
 
   async menuInstantBlock(): Promise<void> {
@@ -163,12 +169,14 @@ export class ModeController implements vscode.Disposable {
 
   async stagedSetDocs(): Promise<void> {
     this.staged.setDocs();
+    this.staged.attributes.tiers = tiersForOp("docs", this.staged.attributes.tiers);
     this.syncStageDecorations();
     this.refreshStagedHint();
   }
 
   async stagedSetCaveman(): Promise<void> {
     this.staged.setCaveman();
+    this.staged.attributes.tiers = tiersForOp("caveman", this.staged.attributes.tiers);
     this.syncStageDecorations();
     this.refreshStagedHint();
   }
@@ -257,7 +265,7 @@ export class ModeController implements vscode.Disposable {
     await setModeContext(MENU_MODE, false);
     await setModeContext(STAGED_MODE, false);
     await setModeContext(CAPTURE_ADJUST_MODE, true);
-    vscode.window.setStatusBarMessage(CAPTURE_HINT, 15_000);
+    this.statusBar.setModeHint(CAPTURE_HINT);
   }
 
   async menuPick(key: string | undefined): Promise<void> {

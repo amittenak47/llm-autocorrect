@@ -3,6 +3,7 @@ import { BlockCapture } from "./blockCapture";
 import { blockLineRange } from "./blockApply";
 import { activeLlmProfile, cfg } from "./config";
 import { PROFILES } from "./languages";
+import { tiersForOp } from "./profiles";
 import { StagedExecutor } from "./stagedExecutor";
 import { StagedOp } from "./stagedSession";
 
@@ -69,7 +70,7 @@ export class Commenter {
       {
         op,
         contextNote: "",
-        tiers: cfg().defaultTiers,
+        tiers: tiersForOp(op, cfg().defaultTiers),
         profileId: activeLlmProfile().id,
       },
       queue

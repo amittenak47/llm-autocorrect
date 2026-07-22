@@ -4,6 +4,28 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Cursor first-run prompt** — offers to set `line.requireDiagnostic: false` when Anysphere diagnostics would block Enter.
+- **Persistent mode key hint** on the status bar (menu / staged / capture) until Esc; click opens the command menu while in a mode.
+- **Reject recovery** for docs/caveman — Output shows model text; picker offers Copy / Force apply.
+- **Context settings** — `context.nearbyMode` (`indentScope` default), `context.signatureDepth` (`chain` default).
+
+### Changed
+
+- Queue review: **unchecked items stay queued** (no longer discarded).
+- Longer queue previews (~120 chars).
+- Default `contextLinesBelow` is **2**; default tiers include **signature**.
+- Nearby context is **indent-scoped** by default; signature is a short enclosing chain.
+- Caveman applies via **comment-suffix merge** (original code preserved).
+- Enter skip for missing LSP now surfaces on the status bar.
+- Line fixes no longer double-send nearby context.
+
+### Fixed
+
+- Signature tier works on the line-fix path (no longer required a TextEditor handle).
+- Fence stripping accepts prose-wrapped model replies.
+
 ## [0.1.0] - 2026-07-15
 
 First release after **0.0.3** — staged workflow, multi-profile LLM, queue modes, region lock, and revert ledger.

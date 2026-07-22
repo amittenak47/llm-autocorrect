@@ -18,6 +18,7 @@ import { StageDecorations } from "./stageDecorations";
 import { StagedExecutor } from "./stagedExecutor";
 import { QueueExecutor } from "./queueExecutor";
 import { StatusBar } from "./statusBar";
+import { maybeOfferCursorDiagnosticDefaults } from "./cursorOnboard";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("LLM Autocorrect");
@@ -43,7 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const queueExecutor = new QueueExecutor(stagedExecutor, lineCorrector);
   fixQueue.setExecutor(queueExecutor);
   const commenter = new Commenter(stagedExecutor, blockCapture);
-  const modeController = new ModeController(
+    const modeController = new ModeController(
     blockCapture,
     stagedExecutor,
     lineCorrector,
@@ -51,11 +52,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     router,
     contextAsm,
     stageDeco,
+    statusBar,
     output
   );
 
   await clearAllModes();
   output.appendLine("[mode] extension activated");
+  void maybeOfferCursorDiagnosticDefaults(context, output);
 
   context.subscriptions.push(
     output,
@@ -73,6 +76,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (e.affectsConfiguration("autocorrect")) {
         statusBar.refresh();
       }
+    }),
+
+    vscode.commands.registerCommand("autocorrect.statusBarClick", async () => {
+      if (statusBar.isInMode()) {
+        await showCommandMenu();
+        return;
+      }
+      await setEnabled(!cfg().enabled);
+      statusBar.refresh();
     }),
 
     vscode.commands.registerCommand("autocorrect.toggle", async () => {

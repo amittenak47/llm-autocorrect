@@ -3,14 +3,36 @@ import { cfg } from "./config";
 
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
+  private readonly modeItem: vscode.StatusBarItem;
   private busyCount = 0;
   private queueCount = 0;
   private queueByProfile = new Map<string, number>();
+  private modeHint: string | undefined;
+  private lastError: string | undefined;
+  private inMode = false;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.item.command = "autocorrect.toggle";
+    this.item.command = "autocorrect.statusBarClick";
     this.item.show();
+    this.modeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    this.modeItem.command = "autocorrect.showMenu";
+    this.refresh();
+  }
+
+  /** True while menu / staged / capture mode is active (click opens command menu). */
+  isInMode(): boolean {
+    return this.inMode;
+  }
+
+  setModeHint(text: string | undefined): void {
+    this.modeHint = text;
+    this.inMode = !!text;
+    this.refresh();
+  }
+
+  setLastError(message: string | undefined): void {
+    this.lastError = message;
     this.refresh();
   }
 
@@ -25,14 +47,28 @@ export class StatusBar implements vscode.Disposable {
       this.item.text = enterOff
         ? `$(sparkle) Autocorrect (manual)${queued}`
         : `$(sparkle) Autocorrect${queued}`;
-      this.item.tooltip =
+      const base =
         (enterOff
-          ? "Enter autocorrect off — manual/staged fixes and queue still work. Click to turn extension off."
-          : "Autocorrect is on — click to turn off") +
-        (this.queueCount > 0 ? ` ${this.queueCount} queued fix(es) pending review.` : "");
+          ? "Enter autocorrect off — manual/staged fixes and queue still work."
+          : "Autocorrect is on.") +
+        (this.inMode
+          ? " Click for command menu."
+          : " Click to toggle extension off.") +
+        (this.queueCount > 0 ? ` ${this.queueCount} queued fix(es).` : "");
+      this.item.tooltip = this.lastError ? `${base}\nLast: ${this.lastError}` : base;
     } else {
       this.item.text = `$(circle-slash) Autocorrect${queued}`;
-      this.item.tooltip = "Autocorrect is off — click to turn on";
+      this.item.tooltip = this.lastError
+        ? `Autocorrect is off — click to turn on.\nLast: ${this.lastError}`
+        : "Autocorrect is off — click to turn on";
+    }
+
+    if (this.modeHint) {
+      this.modeItem.text = `$(key) ${this.modeHint}`;
+      this.modeItem.tooltip = "Autocorrect mode keys — click for command menu · Esc to exit";
+      this.modeItem.show();
+    } else {
+      this.modeItem.hide();
     }
   }
 
@@ -71,5 +107,6 @@ export class StatusBar implements vscode.Disposable {
 
   dispose(): void {
     this.item.dispose();
+    this.modeItem.dispose();
   }
 }

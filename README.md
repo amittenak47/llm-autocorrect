@@ -31,9 +31,9 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Stage Workflow** | **Shift+A** (block) or **Shift+C** (line) → green highlight → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Window** | **S** → W/S (up/down) A/D (start/end) controls to select a block → **E** closes selection window and enters staged mode → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
-| **Stage Context** | **1** lines above/below the target · **2** enclosing `def` / `class` / `function` header · **3** recent edit hunks in this file · **4** imports + signatures from other open editor tabs · **5** last large copy/selection snippet. Tiers **3**–**5** require `context.ringEnabled`. |
+| **Stage Context** | **1** nearby lines (default **indent-scoped**; optional flat `window`) · **2** enclosing signature **chain** (e.g. `class` + `def`, on by default for fix/docs) · **3** recent edit hunks · **4** open-tab signatures · **5** last large **selection** snippet. Tiers **3**–**5** require `context.ringEnabled`. Caveman staging defaults to nearby only. |
 | **Multi-profile LLM** | Groq, Gemini, Anthropic, local llama-server side by side. Choose profile with **M** / **Shift+M** during the modifier step (before **E** / **Shift+E**); that profile owns the request and its queue slot. |
-| **Queue mode** (`queue.mode`) | **Mutually exclusive.** **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). **Deferred batch** (`deferExecution`): enqueue stores **tasks** only (blue dotted); **Q** / **Shift+Q** run selected tasks — LLM + immediate apply, **parallel per profile** (no diff review). |
+| **Queue mode** (`queue.mode`) | **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). Checked items apply; **unchecked stay queued**. **Deferred batch** (`deferExecution`, advanced): enqueue stores **tasks** only (blue dotted); **Q** runs selected tasks — LLM + apply. |
 | **Per-profile concurrency** | Each LLM profile has its own async request pool (`maxConcurrent`: default **1** localhost, **2** cloud). Deferred batch and all LLM calls share the limit — not OS threads, but independent in-flight caps per endpoint. |
 | **Region lock** | Overlapping enqueue prompts first (**Replace** / **Expand & merge** / **Revert & continue** / **Cancel**). Queue border color = LLM profile. Applied fixes live in a **revert ledger** until reverted. |
 | **Queued staged requests** | **Shift+E** enqueues (behavior depends on `queue.mode`). **Q** = current profile; **Shift+Q** = all profiles. |
@@ -53,12 +53,12 @@ You bring your own API key. Keys live in the editor's secret storage, not in set
 
 1. **Install** — VS Code Marketplace, Open VSX, or `.vsix`.
 2. **API key** — Command Palette → **`Autocorrect: Set API Key`**.
-3. **Python LSP** — see [Language server setup](#language-server-setup-vs-code-vs-cursor).
+3. **Python LSP** — see [Language server setup](#language-server-setup-vs-code-vs-cursor). On **Cursor**, the first activation may offer **Use Cursor defaults** (turns off `line.requireDiagnostic` so Enter works when Anysphere diagnostics are quiet).
 4. **Try it** — open `.py`, type `pritn("hello"` on one line, press **Enter** on the next.
 
-**Status bar** (bottom right): on/off, spinner, queue count (`3 queued · groq:2 local:1`). Click to toggle extension.
+**Status bar** (bottom right): on/off, spinner, queue count (`3 queued · groq:2 local:1`). While menu/staged/capture is active, a **persistent key hint** stays visible until **Esc**. Click the Autocorrect item in a mode to open the command menu; otherwise click toggles the extension.
 
-**Logs:** View → Output → **LLM Autocorrect**.
+**Logs:** View → Output → **LLM Autocorrect**. Skip reasons also appear on the status bar after a paid call fails validation or apply.
 
 ---
 
@@ -69,7 +69,7 @@ You bring your own API key. Keys live in the editor's secret storage, not in set
 | Enter menu mode | Double-tap **`Ctrl`** |
 | Exit menu (no staged block) | **`Esc`** |
 
-While in menu or staged mode, the status bar lists available keys.
+While in menu, staged, or capture mode, the status bar shows a **persistent** key cheat sheet (until **Esc**). If letter keys seem ignored, open the menu first (`Ctrl+Shift+;` or double-tap **Ctrl**), or click the Autocorrect status item for the command menu.
 
 ---
 
@@ -100,11 +100,11 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | **F** | Modifier: **caveman** (short inline comments) |
 | *(none)* | Modifier: **best-guess fix** (default) |
 | **X** | Modifier: custom prompt note (per request; saved with queued items) |
-| **1** | Context tier: lines above/below target |
-| **2** | Context tier: enclosing `def` / `class` / `function` header |
+| **1** | Context tier: nearby lines (`indentScope` default; see tutorial 10) |
+| **2** | Context tier: enclosing signature chain (`class` / `def` / …) |
 | **3** | Context tier: recent edit hunks in this file (`ringEnabled`) |
 | **4** | Context tier: imports + signatures from other open tabs (`ringEnabled`) |
-| **5** | Context tier: last copy/selection snippet (`ringEnabled`) |
+| **5** | Context tier: last selection snippet (`ringEnabled`) |
 | **M** | Cycle LLM profile (choose before send) |
 | **Shift+M** | Pick LLM profile (QuickPick; choose before send) |
 
@@ -157,8 +157,10 @@ Each tutorial assumes you opened the menu unless noted.
 
 **Tips**
 
-- Default `line.requireDiagnostic: true` — no squiggle, no API call (saves tokens).
-- Set `line.requireDiagnostic: false` to fix on Enter even without LSP errors. **Token cost:** every Enter on a non-blank line can trigger an LLM call after debounce, even when the line is already fine (you still pay for the prompt; the extension skips apply if the model returns the same text).
+- Default `line.requireDiagnostic: true` — no squiggle, no API call (saves tokens on VS Code + Pylance).
+- On **Cursor**, first launch may offer **Use Cursor defaults** → sets `line.requireDiagnostic` to `false` once (Anysphere diagnostics are often quiet). Decline if **Problems** already shows reliable squiggles.
+- Set `line.requireDiagnostic: false` manually to fix on Enter even without LSP errors. **Token cost:** every Enter on a non-blank line can trigger an LLM call after debounce, even when the line is already fine (you still pay for the prompt; the extension skips apply if the model returns the same text).
+- When Enter skips for no LSP error, the **status bar** explains why (not only the Output channel).
 - Want Enter fixes to **queue** instead of applying right away? See tutorial **15** — Enter queue mode (`queue.enabled` + `queue.mode`).
 - Want to **stop Enter fixes entirely** and only call the LLM when you ask? See tutorial **16** (`disableAutocorrect`).
 
@@ -235,13 +237,13 @@ Set these in **staged mode** (green highlight) **before** **E** or **Shift+E** (
 **When:** Add documentation without changing code lines.
 
 1. Stage a block (tutorials 4–6).
-2. **D** — modifier switches to **documentation**.
+2. **D** — modifier switches to **documentation** (nearby + signature context on by default).
 3. Optional: **X** (tutorial 9); **1**/**2** (tutorial 10).
 4. **E** (tutorial 12) or **Shift+E** (tutorial 13).
 
-Palette alternative: **`Autocorrect: Add Docstrings / Comments`** on a selection (uses default modifiers and active profile).
+Palette alternative: **`Autocorrect: Add Docstrings / Comments`** on a selection (uses docs-oriented default tiers and active profile).
 
-Validation rejects output that alters code or invents new classes. Docs modifier is **still being refined** for accuracy.
+Validation rejects output that alters code or invents new classes. If skipped after a paid call, the Output channel shows the model text and a picker offers **Copy model text** or **Force apply**.
 
 ---
 
@@ -250,11 +252,11 @@ Validation rejects output that alters code or invents new classes. Docs modifier
 **When:** Ultra-short inline comments (`# get user`, `// loop nums`).
 
 1. Stage a block.
-2. **F** — modifier switches to **caveman**.
-3. Optional: **X** (tutorial 9); context tiers (tutorial 10).
+2. **F** — modifier switches to **caveman** (nearby context only by default).
+3. Optional: **X** (tutorial 9); press **2** if you want signature context.
 4. **E** (tutorial 12) or **Shift+E** (tutorial 13).
 
-Line count must not change or the result is skipped. Caveman modifier is **still being refined** for accuracy.
+The extension **keeps your original code** and merges only trailing comments from the model (line count is aligned when possible). If the model rewrote code, you get the same recovery picker as docs (**Copy** / **Force apply**).
 
 Palette: **`Autocorrect: Caveman Comments`**.
 
@@ -282,15 +284,17 @@ Palette: **`Autocorrect: Caveman Comments`**.
 
 | Key | Tier | What it adds |
 | --- | --- | --- |
-| **1** | Nearby | `line.contextLines` above + `contextLinesBelow` below the target block/line |
-| **2** | Signature | Single header line of the enclosing `def` / `class` / `function` |
-| **3** | Recent edits | Last edit hunks you made in this file (diff-style snippets) |
+| **1** | Nearby | Indent-scoped lines around the target by default (`context.nearbyMode: indentScope`), or a flat window. Includes a few lines below (`contextLinesBelow`, default **2**). |
+| **2** | Signature | Enclosing header **chain** by default (`class` + `def`, …) via `context.signatureDepth`. On for fix/docs; off for caveman until you press **2**. |
+| **3** | Recent edits | Last edit hunks in this file (diff-style snippets) |
 | **4** | Open tabs | Import lines + function/class signatures from other visible editor tabs |
-| **5** | Yank | Text from your last large selection or copy in this session |
+| **5** | Yank | Text from your last large **selection** in this session (not clipboard copy) |
 
 Tiers **3–5** require `"autocorrect.context.ringEnabled": true`.
 
-Defaults come from `context.defaultTiers`. Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extended` 2048 tok) or `context.tokenBudget` override.
+Defaults: nearby + signature on (`context.defaultTiers`). Caveman staging resets to nearby only. When the token budget is tight, **signature is kept before nearby**. Output logs which tiers were actually included after budgeting.
+
+Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extended` 2048 tok) or `context.tokenBudget` override.
 
 ---
 
@@ -383,14 +387,14 @@ Default modifier is **best-guess fix**. Status bar shows active modifiers and to
 **Checkpoint review** (`reviewChanges`) — review **proposed edits**
 
 1. Open the menu → **Q** (current profile) or **Shift+Q** (all).
-2. QuickPick shows `original → corrected` previews.
-3. Checked items **apply**; unchecked are **discarded**.
+2. QuickPick shows longer `original → corrected` previews.
+3. Checked items **apply**; unchecked **stay queued**. **Esc** leaves the queue unchanged. Use **Clear Queued Fixes** to drop items.
 
-**Deferred batch** (`deferExecution`) — run **queued tasks**
+**Deferred batch** (`deferExecution`, advanced) — run **queued tasks**
 
 1. Open the menu → **Q** or **Shift+Q**.
 2. QuickPick lists pending **tasks** (op, lines, snippet) — no diff yet.
-3. Checked tasks run (**LLM + immediate apply**, up to each profile's `maxConcurrent`); unchecked are discarded.
+3. Checked tasks run (**LLM + immediate apply**, up to each profile's `maxConcurrent`); unchecked **stay queued**.
 
 **Palette shortcuts**
 
@@ -509,15 +513,17 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | `autocorrect.line.enabled` | `true` | Enter-triggered line fixes |
 | `autocorrect.line.requireDiagnostic` | `true` | **Automatic (Enter):** require LSP error before LLM |
 | `autocorrect.fix.requireDiagnostic` | `false` | **Deliberate (menu/staged):** require LSP error before LLM |
-| `autocorrect.line.contextLines` | `10` | Tier 1: lines above target |
-| `autocorrect.line.contextLinesBelow` | `0` | Tier 1: lines below target |
+| `autocorrect.line.contextLines` | `10` | Tier 1: max lines above (within nearby mode) |
+| `autocorrect.line.contextLinesBelow` | `2` | Tier 1: lines below target |
 | `autocorrect.line.maxLineChars` | `200` | Max chars per context line |
 | `autocorrect.context.tokenBudget` | `0` | Hard context cap (`0` = profile policy) |
 | `autocorrect.context.ringEnabled` | `false` | Enable tiers 3–5 |
-| `autocorrect.context.defaultTiers` | nearby on | Default tier modifiers in staged mode |
+| `autocorrect.context.nearbyMode` | `indentScope` | `indentScope` \| `window` |
+| `autocorrect.context.signatureDepth` | `chain` | `chain` \| `header` |
+| `autocorrect.context.defaultTiers` | nearby + signature | Default tier modifiers in staged mode |
 | `autocorrect.timeoutMs` | `0` | `0` = auto (**5s** cloud, **60s** localhost) |
 | `autocorrect.line.debounceMs` | `800` | Delay after Enter before check |
-| `autocorrect.queue.mode` | `reviewChanges` | **Checkpoint review** vs **deferred batch** (tutorial 13–14). Values: `reviewChanges` \| `deferExecution` |
+| `autocorrect.queue.mode` | `reviewChanges` | Checkpoint review (default) vs deferred batch (advanced). Unchecked stay queued. |
 | `autocorrect.queue.enabled` | `false` | Enter queues instead of applying; uses `queue.mode` (tutorial 15) |
 | `autocorrect.debug` | `false` | Verbose output channel logs |
 
@@ -555,6 +561,10 @@ The extension reads diagnostics from your editor's LSP — it does not ship one.
 
 Use **Anysphere Python** (`anysphere.python`), not Pylance.
 
+**Usually you do not need to paste JSON** — on first activation Autocorrect may offer **Use Cursor defaults**, which sets `autocorrect.line.requireDiagnostic` to `false` so Enter can fix lines when diagnostics are quiet.
+
+Manual fallback (if you dismissed the prompt):
+
 ```json
 {
   "python.languageServer": "Default",
@@ -563,7 +573,7 @@ Use **Anysphere Python** (`anysphere.python`), not Pylance.
 }
 ```
 
-Set `requireDiagnostic` to `true` once **View → Problems** shows errors reliably. With `false`, every Enter on a non-blank line can burn tokens (see tutorial 1).
+Set `requireDiagnostic` back to `true` once **View → Problems** shows errors reliably. With `false`, every Enter on a non-blank line can burn tokens (see tutorial 1).
 
 ### Other languages
 
@@ -592,7 +602,7 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | Problem | What to check |
 | --- | --- |
 | **Nothing on Enter** | File must be a real source doc (`.py`, not Output/Settings). Language ID must be in `autocorrect.languages` (default: `python` only). Master switch on (status bar sparkle, not slash). `autocorrect.disableAutocorrect` must be **false** (tutorial 16). `autocorrect.line.enabled` must be **true**. Wait ~`line.debounceMs` (default 800ms) after Enter. Blank and comment-only lines are skipped. |
-| **Log says `no LSP squiggle`** | With default `line.requireDiagnostic: true`, Enter only calls the LLM when the language server reports an error/warning on that line. Fix LSP setup (**View → Problems**), or temporarily set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor Python, see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
+| **Log says `no LSP squiggle` / status bar skip** | With default `line.requireDiagnostic: true`, Enter only calls the LLM when the language server reports an error/warning on that line. Fix LSP setup (**View → Problems**), or set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor, accept the first-run prompt or see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
 | **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
 | **`already correct` / no edit** | Model returned the same line or `UNCHANGED`. Normal — no apply, but you may still have paid for the prompt. |
 | **Range locked on enqueue** | Overlapping enqueue shows a modal: **Replace**, **Expand & merge** (same profile), **Revert & continue** (if an applied fix overlaps), or **Cancel**. |
@@ -603,18 +613,19 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 
 | Problem | What to check |
 | --- | --- |
-| **Menu keys ignored** | Open the menu first (double-tap **Ctrl**). Keys only work in menu, staged, or Staged Window mode. **Esc** exits menu; staged block needs **Esc** or cancel to clear. |
+| **Menu keys ignored** | Open the menu first (double-tap **Ctrl** or `Ctrl+Shift+;`). Keys only work in menu, staged, or capture mode. The status bar keeps a key hint until **Esc**. Click Autocorrect in a mode for the command menu. |
 | **Staged send skipped** | Deliberate gate: `fix.requireDiagnostic: true` requires an LSP squiggle on the block. Default **false** — sends anytime. |
 | **`buffer changed — skipped`** | File was edited while the LLM was running. Re-stage and send again. |
+| **Paid call but nothing applied** | Status bar shows the reason. Output has the model text for docs/caveman rejects; use **Copy** / **Force apply** when offered. |
 | **`select a block for A`** | **A** needs a non-empty selection. Use **Shift+A** to stage without immediate send, or **S** Staged Window. |
-| **Docs / caveman odd or skipped** | **D** (documentation) rejects output that alters code lines or invents new classes. **F** (caveman) rejects if line count changes. These modifiers and their validation are **still being refined** for accuracy — expect occasional skips or imperfect comments until prompts and checks improve. Use **X** for tighter instructions; try a different profile or smaller block. |
+| **Docs / caveman odd or skipped** | **D** rejects output that alters code lines or invents new classes. **F** merges comments onto your original code and rejects rewrites. Use the recovery picker or **X** for tighter instructions. |
 
 ### Queue, profiles, and API
 
 | Problem | What to check |
 | --- | --- |
 | **Queue wrong profile** | Profile is chosen during modifiers (**M** / **Shift+M**) before **Shift+E**. **Q** shows the **current** profile's queue only; **Shift+Q** shows all. |
-| **Queue empty after review** | Unchecked items in the QuickPick are **discarded**, not left queued. |
+| **Queue empty after review** | Unchecked items **stay queued**. Use **Clear Queued Fixes** to drop them. **Esc** cancels without changing the queue. |
 | **`413` / token limit (Groq)** | Prompt too large. Disable tiers **3–5**; turn off **1**/**2** if needed; smaller selection; `contextPolicy: minimal`; lower `context.tokenBudget`. |
 | **LLM timeout / hung** | Cloud default ~5s; localhost `openai-compatible` default **60s**. Raise profile `timeoutMs` or `autocorrect.timeoutMs`. Confirm llama-server/Ollama is running and `baseUrl` ends with `/v1`. |
 | **API key / auth errors** | Command Palette → **Set API Key** per profile. Keys live in secret storage, not `settings.json`. |
@@ -632,9 +643,8 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 ## Upcoming features
 
 - Broader language testing (Go, Rust, JS/TS, etc.).
-- **Docs (D) and caveman (F) modifiers** — prompts and output validation still being refined for more accurate, consistent results.
-- **Testing and refining context tiers** — the existing **1**–**5** tiers (nearby lines, signature, recent edits, open tabs, yank) need more real-world tuning; token cost vs accuracy tradeoffs are not settled yet.
-- **Context hierarchy and request deduplication** — explore smarter micro-context assembly and collapsing overlapping requests. Surgical line/block fixes may not benefit much from dedup (each target is intentional); file-level context sharing might help efficiency but risks blurring surgical intent. Module- or project-wide context belongs in the **Cursor agent**, not this extension — we need a clear **micro-context** boundary: what stays in autocorrect vs what you delegate upstream.
+- Richer queue review (side-by-side diff UI).
+- Optional further micro-context / request sharing — module- or project-wide context belongs in the **Cursor agent**, not this extension; keep a clear boundary between surgical autocorrect context and agent context.
 
 ---
 

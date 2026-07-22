@@ -1,4 +1,5 @@
-import { stripFences } from "./textUtils";
+import { LanguageProfile } from "./languages";
+import { stripFences, stripTrailingLineComment } from "./textUtils";
 
 /** Normalize raw LLM text: strip fences, CRLF, trailing newline. */
 export function normalizeModelText(response: string): string {
@@ -55,4 +56,45 @@ export function alignToLineCount(
     return [...lines, ...Array(lineCount - lines.length).fill("")].join("\n");
   }
   return lines.slice(0, lineCount).join("\n");
+}
+
+/**
+ * Caveman-safe merge: keep original code on each line; append only a trailing
+ * comment taken from the model line when the code portion still matches.
+ * Returns undefined if the model rewrote code on any line.
+ */
+export function mergeCavemanComments(
+  original: string,
+  modelText: string,
+  profile: LanguageProfile
+): string | undefined {
+  const origLines = original.split("\n");
+  const modelLinesArr = modelText.split("\n");
+  if (origLines.length !== modelLinesArr.length) {
+    return undefined;
+  }
+  const prefixes = profile.lineCommentPrefixes;
+  const out: string[] = [];
+  for (let i = 0; i < origLines.length; i++) {
+    const o = origLines[i];
+    const m = modelLinesArr[i];
+    const oCode = stripTrailingLineComment(o, prefixes);
+    const mCode = stripTrailingLineComment(m, prefixes);
+    if (oCode.trim() !== mCode.trim()) {
+      return undefined;
+    }
+    const commentPart = m.slice(stripTrailingLineComment(m, prefixes).length);
+    if (!commentPart.trim()) {
+      out.push(o);
+      continue;
+    }
+    // Preserve original indentation/code; attach model comment suffix.
+    const base = oCode.length > 0 ? oCode : o.replace(/\s+$/, "");
+    if (commentPart.startsWith(" ") || commentPart.startsWith("\t")) {
+      out.push(base + commentPart);
+    } else {
+      out.push(`${base} ${commentPart}`);
+    }
+  }
+  return out.join("\n");
 }

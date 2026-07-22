@@ -2,6 +2,8 @@ import { CLOUD_DEFAULT_TIMEOUT_MS, LOCAL_DEFAULT_TIMEOUT_MS, isLocalBaseUrl } fr
 
 export type ContextPolicy = "minimal" | "standard" | "extended";
 export type LlmProviderKind = "groq" | "gemini" | "anthropic" | "openai-compatible";
+export type NearbyMode = "indentScope" | "window";
+export type SignatureDepth = "header" | "chain";
 
 export interface ContextTiers {
   nearby: boolean;
@@ -13,11 +15,27 @@ export interface ContextTiers {
 
 export const DEFAULT_CONTEXT_TIERS: ContextTiers = {
   nearby: true,
-  signature: false,
+  signature: true,
   recentEdits: false,
   openTabs: false,
   yank: false,
 };
+
+/** Default tiers when staging/sending a given op (before user toggles 1–5). */
+export function tiersForOp(op: "fix" | "docs" | "caveman", base?: ContextTiers): ContextTiers {
+  const t = { ...(base ?? DEFAULT_CONTEXT_TIERS) };
+  if (op === "caveman") {
+    t.signature = false;
+    t.recentEdits = false;
+    t.openTabs = false;
+    t.yank = false;
+    t.nearby = true;
+  } else {
+    t.nearby = true;
+    t.signature = true;
+  }
+  return t;
+}
 
 export interface LlmProfileConfig {
   id: string;

@@ -11,10 +11,15 @@ import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { isCommentOrBlank, LanguageProfile, PROFILES } from "./languages";
 import { LlmRouter } from "./llmRouter";
-import { estimateTokens } from "./promptLimits";
+import { offerRejectRecovery, reportOutcome } from "./outcomes";
 import { blockFixUserMessage } from "./promptContext";
+import {
+  alignToLineCount,
+  isUnchanged,
+  mergeCavemanComments,
+  normalizeModelText,
+} from "./responseIngress";
 import { StagedAttributes, StagedOp } from "./stagedSession";
-import { normalizeModelText, isUnchanged } from "./responseIngress";
 import { StatusBar } from "./statusBar";
 
 export interface ExecuteResult {
@@ -40,10 +45,12 @@ export class StagedExecutor {
   ): Promise<ExecuteResult> {
     const langProfile = PROFILES[editor.document.languageId];
     if (!langProfile || !cfg().languages.includes(editor.document.languageId)) {
-      vscode.window.setStatusBarMessage(
-        `Autocorrect: unsupported language "${editor.document.languageId}"`,
-        4000
-      );
+      reportOutcome(`unsupported language "${editor.document.languageId}"`, {
+        kind: "skip",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+      });
       return { ok: false };
     }
 
@@ -51,7 +58,12 @@ export class StagedExecutor {
     const blockRange = blockLineRange(doc, range.start.line, range.end.line);
     const text = doc.getText(blockRange);
     if (text.trim().length === 0) {
-      vscode.window.setStatusBarMessage("Autocorrect: staged block is empty", 3000);
+      reportOutcome("staged block is empty", {
+        kind: "skip",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+      });
       return { ok: false };
     }
 
@@ -74,18 +86,23 @@ export class StagedExecutor {
       if (!queued) {
         return { ok: false };
       }
-      vscode.window.setStatusBarMessage(
-        `Autocorrect: task queued [${llmProfile.label}] — Q to run`,
-        5000
-      );
+      reportOutcome(`task queued [${llmProfile.label}] — Q to run`, {
+        kind: "ok",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+        durationMs: 5000,
+      });
       return { ok: true, queued: true };
     }
 
     if (!shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output)) {
-      vscode.window.setStatusBarMessage(
-        "Autocorrect: no LSP error in block — skipped (fix.requireDiagnostic)",
-        5000
-      );
+      reportOutcome("no LSP error in block — skipped (fix.requireDiagnostic)", {
+        kind: "skip",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+      });
       return { ok: false };
     }
 
@@ -95,9 +112,9 @@ export class StagedExecutor {
 
     const lines = blockRange.end.line - blockRange.start.line + 1;
     const tierStr = attrs.tiers.nearby ? "" : " · minimal ctx";
-    vscode.window.setStatusBarMessage(
-      `Autocorrect: ${queue ? "queuing" : "sending"} ${lines}L [${llmProfile.label}]${tierStr} (~${assembled.estimatedTokens} tok)…`,
-      6000
+    reportOutcome(
+      `${queue ? "queuing" : "sending"} ${lines}L [${llmProfile.label}]${tierStr} (~${assembled.estimatedTokens} tok)…`,
+      { kind: "info", durationMs: 6000 }
     );
 
     this.output.appendLine(
@@ -119,33 +136,66 @@ export class StagedExecutor {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.output.appendLine(`[staged] ${msg}`);
-      vscode.window.setStatusBarMessage(`Autocorrect: failed — ${msg}`, 5000);
+      reportOutcome(`failed — ${msg}`, {
+        kind: "error",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+      });
       return { ok: false };
     }
 
     let result = normalizeModelText(response);
     if (attrs.op === "fix" && isUnchanged(result)) {
-      vscode.window.setStatusBarMessage("Autocorrect: already correct", 3000);
+      reportOutcome("already correct", { kind: "ok", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]" });
       return { ok: true };
     }
     if (result.trim().length === 0 || result === text) {
-      vscode.window.setStatusBarMessage("Autocorrect: no changes from model", 3000);
+      reportOutcome("no changes from model", {
+        kind: "skip",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+        modelText: response,
+      });
       return { ok: false };
     }
 
-    if (attrs.op === "caveman" && result.split("\n").length !== text.split("\n").length) {
-      vscode.window.setStatusBarMessage("Autocorrect: caveman changed line count — skipped", 5000);
-      return { ok: false };
+    if (attrs.op === "caveman") {
+      result = alignToLineCount(result, text.split("\n").length, true);
+      const merged = mergeCavemanComments(text, result, langProfile);
+      if (!merged) {
+        const action = await offerRejectRecovery(
+          "caveman rewrote code or line count — skipped",
+          result,
+          this.output
+        );
+        if (action !== "force") {
+          return { ok: false };
+        }
+      } else {
+        result = merged;
+      }
     }
+
     if (attrs.op === "docs" && !this.docsPreserveCode(text, result, langProfile)) {
-      this.output.appendLine("[staged] rejected docs output — code altered or class invented");
-      vscode.window.setStatusBarMessage("Autocorrect: docs altered code — skipped", 5000);
-      return { ok: false };
+      const action = await offerRejectRecovery(
+        "docs altered code — skipped",
+        result,
+        this.output
+      );
+      if (action !== "force") {
+        return { ok: false };
+      }
     }
 
     if (doc.isClosed || doc.getText(blockRange) !== text) {
-      vscode.window.setStatusBarMessage("Autocorrect: buffer changed — skipped", 4000);
+      reportOutcome("buffer changed — skipped", {
+        kind: "skip",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+      });
       return { ok: false };
     }
 
@@ -171,10 +221,13 @@ export class StagedExecutor {
       if (!queued) {
         return { ok: false };
       }
-      vscode.window.setStatusBarMessage(
-        `Autocorrect: queued [${llmProfile.label}] — Q to review changes`,
-        5000
-      );
+      reportOutcome(`queued [${llmProfile.label}] — Q to review changes`, {
+        kind: "ok",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+        durationMs: 5000,
+      });
       return { ok: true, queued: true };
     }
 
@@ -200,9 +253,20 @@ export class StagedExecutor {
           0
         )
       );
-      vscode.window.setStatusBarMessage(`Autocorrect: ${attrs.op} applied`, 3000);
+      reportOutcome(`${attrs.op} applied`, {
+        kind: "ok",
+        output: this.output,
+        statusBar: this.statusBar,
+        logPrefix: "[staged]",
+      });
       return { ok: true };
     }
+    reportOutcome("apply failed — baseline stale or edit rejected", {
+      kind: "error",
+      output: this.output,
+      statusBar: this.statusBar,
+      logPrefix: "[staged]",
+    });
     return { ok: false };
   }
 

@@ -9,9 +9,14 @@ import {
   truncateLines,
 } from "./contextCompress";
 import { EditRing } from "./editRing";
-import { isCommentOrBlank, LanguageProfile } from "./languages";
+import { isCommentOrBlank, LanguageProfile, PROFILES } from "./languages";
 import { estimateTokens } from "./promptLimits";
 import { ContextTiers, LlmProfileConfig, tokenBudgetForPolicy } from "./profiles";
+import {
+  collectNearbyLines,
+  enclosingSignatureText,
+  orderContextChunks,
+} from "./contextScope";
 
 export interface AssembledContext {
   supplementary: string;
@@ -75,7 +80,16 @@ export class ContextAssemblerService implements vscode.Disposable {
     const doc = editor.document;
     const target = doc.getText(range);
     const budget = this.resolveBudget(llmProfile);
-    const chunks = this.buildChunks(doc, range.start.line, range.end.line, target, tiers, editor, true);
+    const chunks = this.buildChunks(
+      doc,
+      range.start.line,
+      range.end.line,
+      target,
+      tiers,
+      editor,
+      true,
+      PROFILES[doc.languageId]
+    );
     const result = assembleWithinBudget(chunks, budget);
     const suppChunks = chunks.filter((c) => c.tier !== "target" && result.includedTiers.includes(c.tier));
     const supplementary = suppChunks
@@ -119,37 +133,43 @@ export class ContextAssemblerService implements vscode.Disposable {
     endLine: number,
     target: string,
     tiers: ContextTiers,
-    editor: vscode.TextEditor | undefined,
-    isBlock: boolean,
+    _editor: vscode.TextEditor | undefined,
+    _isBlock: boolean,
     langProfile?: LanguageProfile
   ): ContextChunk[] {
     const c = cfg();
     const chunks: ContextChunk[] = [{ tier: "target", label: "target", text: target }];
+    const allLines: string[] = [];
+    for (let i = 0; i < doc.lineCount; i++) {
+      allLines.push(doc.lineAt(i).text);
+    }
 
-    if (tiers.nearby) {
-      const above: string[] = [];
-      const from = Math.max(0, startLine - c.contextLines);
-      for (let i = from; i < startLine; i++) {
-        above.push(doc.lineAt(i).text);
-      }
-      const below: string[] = [];
-      for (let i = endLine + 1; i <= Math.min(doc.lineCount - 1, endLine + c.contextLinesBelow); i++) {
-        below.push(doc.lineAt(i).text);
-      }
-      const nearby = [...above, ...below].join("\n");
-      if (nearby.trim()) {
+    if (tiers.signature) {
+      const sig = enclosingSignatureText(allLines, startLine, c.signatureDepth);
+      if (sig) {
         chunks.push({
-          tier: "nearby",
-          label: "nearby lines",
-          text: this.compressChunk(nearby, langProfile),
+          tier: "signature",
+          label: c.signatureDepth === "chain" ? "enclosing signature chain" : "enclosing signature",
+          text: sig,
         });
       }
     }
 
-    if (tiers.signature && editor) {
-      const sig = this.enclosingSignature(editor, startLine);
-      if (sig) {
-        chunks.push({ tier: "signature", label: "enclosing signature", text: sig });
+    if (tiers.nearby) {
+      const nearby = collectNearbyLines(
+        allLines,
+        startLine,
+        endLine,
+        c.contextLines,
+        c.contextLinesBelow,
+        c.nearbyMode
+      );
+      if (nearby.trim()) {
+        chunks.push({
+          tier: "nearby",
+          label: c.nearbyMode === "indentScope" ? "nearby (indent scope)" : "nearby lines",
+          text: this.compressChunk(nearby, langProfile),
+        });
       }
     }
 
@@ -175,7 +195,7 @@ export class ContextAssemblerService implements vscode.Disposable {
       chunks.push({ tier: "yank", label: "yank/selection", text: truncateLines(this.lastYank, c.maxLineChars) });
     }
 
-    return chunks;
+    return orderContextChunks(chunks);
   }
 
   private compressChunk(text: string, profile?: LanguageProfile): string {
@@ -189,22 +209,6 @@ export class ContextAssemblerService implements vscode.Disposable {
     t = stripBlankLines(t);
     t = collapseImports(t);
     return t;
-  }
-
-  private enclosingSignature(editor: vscode.TextEditor, line: number): string | undefined {
-    const doc = editor.document;
-    const lineText = doc.lineAt(line).text;
-    const classMatch = lineText.match(/^\s*(class|def|function|func|interface|struct|enum)\s+\w+/);
-    if (classMatch) {
-      return lineText.trim();
-    }
-    for (let i = line; i >= Math.max(0, line - 80); i--) {
-      const t = doc.lineAt(i).text;
-      if (/^\s*(class|def|function|func|interface|struct|enum)\s+\w+/.test(t)) {
-        return t.trim();
-      }
-    }
-    return undefined;
   }
 
   private openTabSignatures(excludeUri: string): string {

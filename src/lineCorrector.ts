@@ -6,7 +6,6 @@ import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
 import { FixQueue, QueuedFix } from "./fixQueue";
 import { LlmRouter } from "./llmRouter";
 import { lineFixUserMessage } from "./promptContext";
-import { trimContextLines } from "./promptLimits";
 import { fixForSingleLineTarget, isUnchanged, modelLines, normalizeModelText } from "./responseIngress";
 import { StatusBar } from "./statusBar";
 
@@ -264,6 +263,11 @@ export class LineCorrector implements vscode.Disposable {
           "Autocorrect: no LSP error on line — skipped (fix.requireDiagnostic)",
           4000
         );
+      } else if (!manual && cfg().requireDiagnostic) {
+        vscode.window.setStatusBarMessage(
+          "Autocorrect: no LSP error — skipped. On Cursor set line.requireDiagnostic false",
+          6000
+        );
       }
       return;
     }
@@ -279,24 +283,15 @@ export class LineCorrector implements vscode.Disposable {
     }
 
     const c = cfg();
-    const contextStart = Math.max(0, line - c.contextLines);
-    const contextLines: string[] = [];
-    for (let i = contextStart; i < line; i++) {
-      contextLines.push(doc.lineAt(i).text);
-    }
-    const context = trimContextLines(contextLines, c.contextLines, c.maxLineChars);
-
     const llmProfile = profileIdOverride
       ? (this.router.profileById(profileIdOverride) ?? activeLlmProfile())
       : activeLlmProfile();
     const tiers = force ? c.defaultTiers : { ...c.defaultTiers, recentEdits: false, openTabs: false, yank: false };
     const assembled = this.contextAsm.assembleLine(doc, line, profile, tiers, llmProfile);
-    const finalUser = assembled.supplementary.trim()
-      ? lineFixUserMessage(
-          `${assembled.supplementary}\n\nContext (lines above the target):\n${context || "(start of file)"}`,
-          original
-        )
-      : lineFixUserMessage(context, original);
+    const finalUser = lineFixUserMessage(
+      assembled.supplementary.trim() || "(start of file)",
+      original
+    );
 
     const key = this.key(doc.uri, line);
     const abort = new AbortController();

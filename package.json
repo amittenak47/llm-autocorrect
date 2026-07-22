@@ -23,6 +23,10 @@
         "title": "Autocorrect: Toggle On/Off"
       },
       {
+        "command": "autocorrect.statusBarClick",
+        "title": "Autocorrect: Status Bar Click"
+      },
+      {
         "command": "autocorrect.setApiKey",
         "title": "Autocorrect: Set API Key"
       },
@@ -215,7 +219,8 @@
         { "command": "autocorrect.captureMoveLineStart", "when": "false" },
         { "command": "autocorrect.captureMoveLineEnd", "when": "false" },
         { "command": "autocorrect.captureFinish", "when": "false" },
-        { "command": "autocorrect.captureCancel", "when": "false" }
+        { "command": "autocorrect.captureCancel", "when": "false" },
+        { "command": "autocorrect.statusBarClick", "when": "false" }
       ]
     },
     "keybindings": [
@@ -453,7 +458,7 @@
         },
         "autocorrect.line.contextLinesBelow": {
           "type": "number",
-          "default": 0,
+          "default": 2,
           "description": "Lines below the target to include when context tier 1 (nearby) is enabled."
         },
         "autocorrect.line.maxLineChars": {
@@ -471,16 +476,28 @@
           "default": false,
           "description": "Master switch for context tiers 3–5 (recent edits, open tabs, yank)."
         },
+        "autocorrect.context.nearbyMode": {
+          "type": "string",
+          "enum": ["indentScope", "window"],
+          "default": "indentScope",
+          "description": "How tier 1 (nearby) collects lines: indentScope (same/outer indent block) or window (flat N above / M below)."
+        },
+        "autocorrect.context.signatureDepth": {
+          "type": "string",
+          "enum": ["header", "chain"],
+          "default": "chain",
+          "description": "Tier 2 signature: single enclosing header, or a short outer→inner chain (e.g. class + def)."
+        },
         "autocorrect.context.defaultTiers": {
           "type": "object",
           "default": {
             "nearby": true,
-            "signature": false,
+            "signature": true,
             "recentEdits": false,
             "openTabs": false,
             "yank": false
           },
-          "description": "Default context tier flags when entering staged mode."
+          "description": "Default context tier flags when entering staged mode (fix/docs). Caveman defaults to nearby only."
         },
         "autocorrect.activeProfile": {
           "type": "string",
@@ -545,8 +562,8 @@
             "Deferred batch"
           ],
           "enumDescriptions": [
-            "Checkpoint review: enqueue calls the LLM immediately; Q/Shift+Q review proposed edits before apply (amber highlights).",
-            "Deferred batch: enqueue stores tasks only; Q/Shift+Q runs selected tasks (LLM + immediate apply, parallel per profile)."
+            "Checkpoint review (default): enqueue calls the LLM; Q reviews proposed edits. Unchecked items stay queued.",
+            "Deferred batch (advanced): enqueue stores tasks only; Q runs selected tasks (LLM + apply). Unchecked stay queued."
           ],
           "description": "Queue behavior (mutually exclusive). Checkpoint review = edit checkpoints before apply. Deferred batch = batch LLM run on Q."
         },

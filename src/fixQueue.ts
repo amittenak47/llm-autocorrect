@@ -466,7 +466,7 @@ export class FixQueue implements vscode.Disposable {
       return {
         label: `$(play) ${shortName(f.fileName)} — ${f.op} [${pl?.label ?? f.profileId}]`,
         description: taskDescription(f),
-        detail: f.contextNote || undefined,
+        detail: taskDetail(f),
         picked: true,
         fix: f,
       };
@@ -477,17 +477,13 @@ export class FixQueue implements vscode.Disposable {
     const chosen = await vscode.window.showQuickPick(items, {
       canPickMany: true,
       title,
-      placeHolder: "Enter runs checked tasks (LLM then apply); unchecked discarded; Esc keeps queue",
+      placeHolder: "Enter runs checked tasks (LLM then apply); unchecked stay queued; Esc cancels",
     });
     if (!chosen) {
       return;
     }
     const run = new Set(chosen.map((i) => i.fix));
-    const rejected = pool.filter((f) => !run.has(f));
-    if (rejected.length > 0) {
-      this.output.appendLine(`[queue] discarded ${rejected.length} task(s)`);
-    }
-    this.fixes = this.fixes.filter((f) => !pool.includes(f) || run.has(f));
+    const stillQueued = pool.length - run.size;
 
     const tasks = chosen.map((i) => i.fix);
     const outcomes = await Promise.all(
@@ -511,7 +507,7 @@ export class FixQueue implements vscode.Disposable {
     const summary =
       `ran ${ok} task(s)` +
       (failed > 0 ? `, ${failed} failed` : "") +
-      (rejected.length > 0 ? `, ${rejected.length} discarded` : "");
+      (stillQueued > 0 ? `, ${stillQueued} still queued` : "");
     this.output.appendLine(`[queue] ${summary}`);
     vscode.window.setStatusBarMessage(`Autocorrect: ${summary}`, 5000);
   }
@@ -528,7 +524,7 @@ export class FixQueue implements vscode.Disposable {
       return {
         label: `$(edit) ${shortName(f.fileName)} — ${f.op} [${pl?.label ?? f.profileId}]`,
         description: changeDescription(f),
-        detail: f.contextNote || undefined,
+        detail: changeDetail(f),
         picked: true,
         fix: f,
       };
@@ -539,19 +535,18 @@ export class FixQueue implements vscode.Disposable {
     const chosen = await vscode.window.showQuickPick(items, {
       canPickMany: true,
       title,
-      placeHolder: "Enter applies checked changes; unchecked discarded; Esc keeps queue",
+      placeHolder: "Enter applies checked changes; unchecked stay queued; Esc cancels",
     });
     if (!chosen) {
       return;
     }
     const keep = new Set(chosen.map((i) => i.fix));
-    const rejected = pool.filter((f) => !keep.has(f));
-    if (rejected.length > 0) {
-      this.output.appendLine(`[queue] discarded ${rejected.length} change(s) after review`);
+    const stillQueued = pool.length - keep.size;
+    if (stillQueued > 0) {
+      this.output.appendLine(`[queue] ${stillQueued} change(s) left queued (unchecked)`);
     }
-    this.fixes = this.fixes.filter((f) => !pool.includes(f) || keep.has(f));
-    this.sync();
     await this.apply([...keep]);
+    // apply() removes applied items; unchecked were never removed from this.fixes
   }
 
   private pendingPool(profileFilter?: string): QueuedFix[] {
@@ -809,18 +804,28 @@ function shortName(fileName: string): string {
 }
 
 function preview(original: string, corrected: string): string {
-  const a = original.trim().replace(/\s+/g, " ").slice(0, 40);
-  const b = corrected.trim().replace(/\s+/g, " ").slice(0, 40);
+  const a = original.trim().replace(/\s+/g, " ").slice(0, 120);
+  const b = corrected.trim().replace(/\s+/g, " ").slice(0, 120);
   return `${a} → ${b}`;
 }
 
 function changeDescription(f: QueuedFix): string {
-  const head = f.label.length > 50 ? `${f.label.slice(0, 50)}…` : f.label;
-  return `${head} · ${preview(f.original, f.corrected)}`;
+  const head = f.label.length > 60 ? `${f.label.slice(0, 60)}…` : f.label;
+  return head;
+}
+
+function changeDetail(f: QueuedFix): string {
+  const note = f.contextNote ? `${f.contextNote} · ` : "";
+  return `${note}${preview(f.original, f.corrected)}`;
 }
 
 function taskDescription(f: QueuedFix): string {
-  const head = f.label.length > 50 ? `${f.label.slice(0, 50)}…` : f.label;
-  const snippet = f.original.trim().replace(/\s+/g, " ").slice(0, 48);
-  return `${head} · pending · ${snippet}`;
+  const head = f.label.length > 60 ? `${f.label.slice(0, 60)}…` : f.label;
+  return `${head} · pending`;
+}
+
+function taskDetail(f: QueuedFix): string {
+  const note = f.contextNote ? `${f.contextNote} · ` : "";
+  const snippet = f.original.trim().replace(/\s+/g, " ").slice(0, 120);
+  return `${note}${snippet}`;
 }
