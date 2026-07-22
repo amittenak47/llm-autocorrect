@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
+import { withUserContext } from "./promptContext";
 import { PROFILES, detectLanguage, LanguageProfile } from "./languages";
-import { LlmClient, stripFences } from "./llm";
+import { LlmRouter } from "./llmRouter";
+import { stripFences } from "./llm";
 import { StatusBar } from "./statusBar";
 
 /** Languages close enough that offering a "translation" would be noise. */
@@ -23,7 +25,7 @@ export class PasteTranslator implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
-    private readonly llm: LlmClient,
+    private readonly router: LlmRouter,
     private readonly statusBar: StatusBar,
     private readonly output: vscode.OutputChannel
   ) {
@@ -120,13 +122,13 @@ export class PasteTranslator implements vscode.Disposable {
     let response: string;
     try {
       response = await this.statusBar.withBusy(() =>
-        this.llm.complete({
+        this.router.complete({
           system:
             `You translate code between programming languages. ` +
             `Convert the given ${sourceName} code to idiomatic ${target.name}. ` +
             `Preserve behavior, names, and comments. ` +
             `Reply with ONLY the translated ${target.name} code — no code fences, no explanations.`,
-          user: sourceText,
+          user: withUserContext(`Code to translate:\n${sourceText}`),
           maxTokens: 2048,
           signal: new AbortController().signal,
         })

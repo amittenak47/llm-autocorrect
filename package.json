@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -27,12 +27,354 @@
         "title": "Autocorrect: Set API Key"
       },
       {
-        "command": "autocorrect.translateSelection",
-        "title": "Autocorrect: Translate Selection to Current File's Language"
+        "command": "autocorrect.enterMenuMode",
+        "title": "Autocorrect: Enter Menu Mode"
+      },
+      {
+        "command": "autocorrect.reviewQueuedFixes",
+        "title": "Autocorrect: Review Queued Fixes"
+      },
+      {
+        "command": "autocorrect.applyQueuedFixes",
+        "title": "Autocorrect: Apply All Queued Fixes"
+      },
+      {
+        "command": "autocorrect.clearQueuedFixes",
+        "title": "Autocorrect: Clear Queued Fixes"
+      },
+      {
+        "command": "autocorrect.removeQueuedAtCursor",
+        "title": "Autocorrect: Remove or Revert Queued Change at Cursor"
+      },
+      {
+        "command": "autocorrect.toggleQueueMode",
+        "title": "Autocorrect: Toggle Review Before Apply Mode"
+      },
+      {
+        "command": "autocorrect.toggleDisableAutocorrect",
+        "title": "Autocorrect: Toggle Enter Autocorrect Off"
       },
       {
         "command": "autocorrect.correctSelection",
-        "title": "Autocorrect: Correct Selected Line"
+        "title": "Autocorrect: Correct Line Near Cursor"
+      },
+      {
+        "command": "autocorrect.correctBlock",
+        "title": "Autocorrect: Correct Selected Block"
+      },
+      {
+        "command": "autocorrect.documentBlock",
+        "title": "Autocorrect: Add Docstrings / Comments"
+      },
+      {
+        "command": "autocorrect.cavemanComment",
+        "title": "Autocorrect: Caveman Comments"
+      },
+      {
+        "command": "autocorrect.translateSelection",
+        "title": "Autocorrect: Translate Selection"
+      },
+      {
+        "command": "autocorrect.showMenu",
+        "title": "Autocorrect: Command Menu (QuickPick)"
+      },
+      {
+        "command": "autocorrect.exitMenuMode",
+        "title": "Autocorrect: Exit Menu Mode"
+      },
+      {
+        "command": "autocorrect.menuKeyA",
+        "title": "Autocorrect: Menu — Block (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftA",
+        "title": "Autocorrect: Menu — Stage Block (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyS",
+        "title": "Autocorrect: Menu — Capture (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyQ",
+        "title": "Autocorrect: Menu — Review Queue (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyC",
+        "title": "Autocorrect: Menu — Line (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftC",
+        "title": "Autocorrect: Menu — Stage Line (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSetDocs",
+        "title": "Autocorrect: Staged — Docs flag (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSetCaveman",
+        "title": "Autocorrect: Staged — Caveman flag (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSetContext",
+        "title": "Autocorrect: Staged — Context note (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSubmit",
+        "title": "Autocorrect: Staged — Send now (internal)"
+      },
+      {
+        "command": "autocorrect.stagedSubmitQueue",
+        "title": "Autocorrect: Staged — Enqueue (internal)"
+      },
+      {
+        "command": "autocorrect.stagedCancel",
+        "title": "Autocorrect: Staged — Cancel (internal)"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier1",
+        "title": "Autocorrect: Staged — Context tier 1 (internal)"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier2",
+        "title": "Autocorrect: Staged — Context tier 2 (internal)"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier3",
+        "title": "Autocorrect: Staged — Context tier 3 (internal)"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier4",
+        "title": "Autocorrect: Staged — Context tier 4 (internal)"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier5",
+        "title": "Autocorrect: Staged — Context tier 5 (internal)"
+      },
+      {
+        "command": "autocorrect.stagedCycleProfile",
+        "title": "Autocorrect: Staged — Cycle profile (internal)"
+      },
+      {
+        "command": "autocorrect.stagedPickProfile",
+        "title": "Autocorrect: Staged — Pick profile (internal)"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftQ",
+        "title": "Autocorrect: Menu — Review all queues (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveUp",
+        "title": "Autocorrect: Capture Move Up (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveDown",
+        "title": "Autocorrect: Capture Move Down (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveLineStart",
+        "title": "Autocorrect: Capture Line Start (internal)"
+      },
+      {
+        "command": "autocorrect.captureMoveLineEnd",
+        "title": "Autocorrect: Capture Line End (internal)"
+      },
+      {
+        "command": "autocorrect.captureFinish",
+        "title": "Autocorrect: Finish Capture (internal)"
+      },
+      {
+        "command": "autocorrect.captureCancel",
+        "title": "Autocorrect: Cancel Capture (internal)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "autocorrect.exitMenuMode", "when": "false" },
+        { "command": "autocorrect.menuKeyA", "when": "false" },
+        { "command": "autocorrect.menuKeyShiftA", "when": "false" },
+        { "command": "autocorrect.menuKeyS", "when": "false" },
+        { "command": "autocorrect.menuKeyQ", "when": "false" },
+        { "command": "autocorrect.menuKeyC", "when": "false" },
+        { "command": "autocorrect.menuKeyShiftC", "when": "false" },
+        { "command": "autocorrect.stagedSetDocs", "when": "false" },
+        { "command": "autocorrect.stagedSetCaveman", "when": "false" },
+        { "command": "autocorrect.stagedSetContext", "when": "false" },
+        { "command": "autocorrect.stagedSubmit", "when": "false" },
+        { "command": "autocorrect.stagedSubmitQueue", "when": "false" },
+        { "command": "autocorrect.stagedCancel", "when": "false" },
+        { "command": "autocorrect.stagedToggleTier1", "when": "false" },
+        { "command": "autocorrect.stagedToggleTier2", "when": "false" },
+        { "command": "autocorrect.stagedToggleTier3", "when": "false" },
+        { "command": "autocorrect.stagedToggleTier4", "when": "false" },
+        { "command": "autocorrect.stagedToggleTier5", "when": "false" },
+        { "command": "autocorrect.stagedCycleProfile", "when": "false" },
+        { "command": "autocorrect.stagedPickProfile", "when": "false" },
+        { "command": "autocorrect.menuKeyShiftQ", "when": "false" },
+        { "command": "autocorrect.captureMoveUp", "when": "false" },
+        { "command": "autocorrect.captureMoveDown", "when": "false" },
+        { "command": "autocorrect.captureMoveLineStart", "when": "false" },
+        { "command": "autocorrect.captureMoveLineEnd", "when": "false" },
+        { "command": "autocorrect.captureFinish", "when": "false" },
+        { "command": "autocorrect.captureCancel", "when": "false" }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "autocorrect.enterMenuMode",
+        "key": "ctrl ctrl",
+        "mac": "cmd cmd",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.enterMenuMode",
+        "key": "ctrl+shift+;",
+        "mac": "cmd+shift+;",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.exitMenuMode",
+        "key": "escape",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.stagedCancel",
+        "key": "escape",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyA",
+        "key": "a",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftA",
+        "key": "shift+a",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyS",
+        "key": "s",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyQ",
+        "key": "q",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftQ",
+        "key": "shift+q",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyC",
+        "key": "c",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.menuKeyShiftC",
+        "key": "shift+c",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.stagedSetDocs",
+        "key": "d",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSetCaveman",
+        "key": "f",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSetContext",
+        "key": "x",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSubmit",
+        "key": "e",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedSubmitQueue",
+        "key": "shift+e",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyA",
+        "key": "a",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.menuKeyC",
+        "key": "c",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier1",
+        "key": "1",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier2",
+        "key": "2",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier3",
+        "key": "3",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier4",
+        "key": "4",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedToggleTier5",
+        "key": "5",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedCycleProfile",
+        "key": "m",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedPickProfile",
+        "key": "shift+m",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveUp",
+        "key": "w",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveDown",
+        "key": "s",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveLineStart",
+        "key": "a",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureMoveLineEnd",
+        "key": "d",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureFinish",
+        "key": "e",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
+      },
+      {
+        "command": "autocorrect.captureCancel",
+        "key": "escape",
+        "when": "editorTextFocus && autocorrect.captureAdjustMode == true"
       }
     ],
     "configuration": {
@@ -43,10 +385,15 @@
           "default": true,
           "description": "Master switch for the whole extension."
         },
+        "autocorrect.disableAutocorrect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable Enter-triggered line autocorrect. Manual fixes (C/A), staged mode (E/Shift+E), and queue review still work. Use to avoid automatic LLM calls while typing."
+        },
         "autocorrect.line.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Fix typos/syntax errors on the previous line when you press Enter."
+          "description": "Fix typos/syntax errors on the previous line when you press Enter. Ignored when disableAutocorrect is true."
         },
         "autocorrect.paste.enabled": {
           "type": "boolean",
@@ -87,7 +434,87 @@
         "autocorrect.line.requireDiagnostic": {
           "type": "boolean",
           "default": true,
-          "description": "Only call the LLM when the language server reports an error/warning on the line (strongly recommended — kills most API calls and false corrections)."
+          "description": "Enter-triggered line fixes only: when true, call the LLM only if the language server reports an error or warning on the line you just left. Set to false to autocorrect on Enter even without a squiggle."
+        },
+        "autocorrect.fix.requireDiagnostic": {
+          "type": "boolean",
+          "default": false,
+          "description": "Manual fixes (menu A/C, staged E/Shift+E, palette commands): when true, only run if the target line or block has an LSP error or warning. Default false — send anytime."
+        },
+        "autocorrect.prompt.prefix": {
+          "type": "string",
+          "default": "",
+          "description": "Text prepended to every LLM user prompt as context (project conventions, file role, etc.). Combined with per-request X notes in staged mode."
+        },
+        "autocorrect.line.contextLines": {
+          "type": "number",
+          "default": 10,
+          "description": "Lines above the target line/block to include when context tier 1 (nearby) is enabled."
+        },
+        "autocorrect.line.contextLinesBelow": {
+          "type": "number",
+          "default": 0,
+          "description": "Lines below the target to include when context tier 1 (nearby) is enabled."
+        },
+        "autocorrect.line.maxLineChars": {
+          "type": "number",
+          "default": 200,
+          "description": "Maximum characters per context line before truncation."
+        },
+        "autocorrect.context.tokenBudget": {
+          "type": "number",
+          "default": 0,
+          "description": "Hard token cap for supplementary context (0 = use profile contextPolicy budget)."
+        },
+        "autocorrect.context.ringEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master switch for context tiers 3–5 (recent edits, open tabs, yank)."
+        },
+        "autocorrect.context.defaultTiers": {
+          "type": "object",
+          "default": {
+            "nearby": true,
+            "signature": false,
+            "recentEdits": false,
+            "openTabs": false,
+            "yank": false
+          },
+          "description": "Default context tier flags when entering staged mode."
+        },
+        "autocorrect.activeProfile": {
+          "type": "string",
+          "default": "default",
+          "description": "Active LLM profile id from autocorrect.profiles."
+        },
+        "autocorrect.profiles": {
+          "type": "array",
+          "default": [],
+          "description": "Named LLM profiles. When empty, legacy provider/model/baseUrl settings are used as a single 'default' profile.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "provider": {
+                "type": "string",
+                "enum": ["groq", "gemini", "anthropic", "openai-compatible"]
+              },
+              "model": { "type": "string" },
+              "baseUrl": { "type": "string" },
+              "contextPolicy": {
+                "type": "string",
+                "enum": ["minimal", "standard", "extended"]
+              },
+              "timeoutMs": { "type": "number" },
+              "maxConcurrent": {
+                "type": "number",
+                "minimum": 1,
+                "description": "Max concurrent LLM requests for this profile (default: 1 for localhost, 2 for cloud)."
+              },
+              "color": { "type": "string" }
+            }
+          }
         },
         "autocorrect.line.debounceMs": {
           "type": "number",
@@ -106,8 +533,27 @@
         },
         "autocorrect.timeoutMs": {
           "type": "number",
-          "default": 5000,
-          "description": "Abort LLM requests that take longer than this."
+          "default": 0,
+          "description": "Abort LLM requests after this many ms (0 = auto: 5s cloud, 60s localhost openai-compatible)."
+        },
+        "autocorrect.queue.mode": {
+          "type": "string",
+          "enum": ["reviewChanges", "deferExecution"],
+          "default": "reviewChanges",
+          "enumItemLabels": [
+            "Checkpoint review",
+            "Deferred batch"
+          ],
+          "enumDescriptions": [
+            "Checkpoint review: enqueue calls the LLM immediately; Q/Shift+Q review proposed edits before apply (amber highlights).",
+            "Deferred batch: enqueue stores tasks only; Q/Shift+Q runs selected tasks (LLM + immediate apply, parallel per profile)."
+          ],
+          "description": "Queue behavior (mutually exclusive). Checkpoint review = edit checkpoints before apply. Deferred batch = batch LLM run on Q."
+        },
+        "autocorrect.queue.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enter queue mode: Enter-triggered autocorrect queues instead of applying immediately. Behavior follows autocorrect.queue.mode (reviewChanges = review edits on Q; deferExecution = run tasks on Q)."
         }
       }
     }
