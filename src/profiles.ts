@@ -159,24 +159,16 @@ export const DEFAULT_PROFILES: LlmProfileConfig[] = [
 export function normalizeProfile(profile: LlmProfileConfig): LlmProfileConfig {
   return {
     ...profile,
+    reasoningMode: profile.reasoningMode ?? "off",
     reasoningEffort: profile.reasoningEffort ?? defaultReasoningEffort(profile),
   };
 }
 
-export function effectiveReasoningMode(
-  profile: LlmProfileConfig,
-  globalMode?: ReasoningMode
-): ReasoningMode {
-  if (profile.reasoningMode !== undefined) {
-    return profile.reasoningMode;
-  }
-  return globalMode ?? "off";
+export function effectiveReasoningMode(profile: LlmProfileConfig): ReasoningMode {
+  return profile.reasoningMode ?? "off";
 }
 
-export function effectiveMaxTokensLine(
-  profile: LlmProfileConfig,
-  globalMode?: ReasoningMode
-): number {
+export function effectiveMaxTokensLine(profile: LlmProfileConfig): number {
   if (profile.maxTokensLine && profile.maxTokensLine > 0) {
     return profile.maxTokensLine;
   }
@@ -186,13 +178,12 @@ export function effectiveMaxTokensLine(
     // Reasoning models (llama-server, Qwen, etc.) burn output budget before content.
     return 2048;
   }
-  return effectiveReasoningMode(profile, globalMode) === "log" ? 512 : 300;
+  return effectiveReasoningMode(profile) === "log" ? 512 : 300;
 }
 
 export function effectiveMaxTokensBlock(
   profile: LlmProfileConfig,
-  estimated: number,
-  globalMode?: ReasoningMode
+  estimated: number
 ): number {
   const floor = profile.maxTokensBlock ?? 0;
   if (floor > 0) {

@@ -67,8 +67,7 @@ export class LlmClient {
     }
 
     const maxTokens = capMaxTokens(profile.provider, req.maxTokens, req.system, req.user);
-    const globalMode = cfg().reasoningMode;
-    const reasoningExtras = buildReasoningExtras(profile, globalMode);
+    const reasoningExtras = buildReasoningExtras(profile);
 
     switch (profile.provider) {
       case "groq":
@@ -135,8 +134,7 @@ export class LlmClient {
   }
 
   private emitReasoning(profile: LlmProfileConfig, parsed: ParsedLlmResponse): void {
-    const globalMode = cfg().reasoningMode;
-    const mode = effectiveReasoningMode(profile, globalMode);
+    const mode = effectiveReasoningMode(profile);
     const debug = cfg().debug;
 
     if (parsed.reasoning && mode === "log") {

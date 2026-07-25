@@ -131,7 +131,7 @@ export class StagedExecutor {
         this.router.complete({
           system: this.systemPrompt(attrs.op, langProfile),
           user: userMsg,
-          maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(text), cfg().reasoningMode),
+          maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(text)),
           signal: new AbortController().signal,
           profileId: llmProfile.id,
           kind: attrs.op === "fix" ? "fix" : "raw",

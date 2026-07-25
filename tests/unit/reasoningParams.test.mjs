@@ -153,13 +153,14 @@ describe("llmResponse parsing", () => {
 });
 
 describe("default profiles", () => {
-  it("returns five built-in profiles when settings empty", () => {
+  it("returns built-in profiles when settings empty", () => {
     const profiles = resolveProfiles([], "groq", "", "");
-    assert.equal(profiles.length, 5);
+    assert.equal(profiles.length, DEFAULT_PROFILES.length);
     assert.deepEqual(
       profiles.map((p) => p.id),
       DEFAULT_PROFILES.map((p) => p.id)
     );
+    assert.ok(profiles.some((p) => p.id === "guardian"));
   });
 
   it("local profile defaults to off + 2048 line tokens", () => {

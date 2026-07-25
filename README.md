@@ -310,7 +310,6 @@ Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extend
 ```json
 {
   "autocorrect.activeProfile": "local",
-  "autocorrect.llm.reasoningMode": "off",
   "autocorrect.profiles": [
     {
       "id": "groq",
@@ -342,7 +341,7 @@ If `profiles` is unset, the package default is: `groq`, `gemini`, `anthropic`, `
 
 Set API key per cloud profile: **Autocorrect: Set API Key**. Localhost needs no key.
 
-**Reasoning** — `reasoningMode: "off"` minimizes thinking tokens (recommended for Enter fixes). `"log"` writes reasoning to **Output → LLM Autocorrect** but never applies it. Profile setting overrides `autocorrect.llm.reasoningMode`.
+**Reasoning** — set per profile: `reasoningMode: "off"` minimizes thinking tokens (recommended for Enter fixes). `"log"` writes reasoning to **Output → LLM Autocorrect** but never applies it.
 
 **Usage**
 
@@ -544,7 +543,6 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | `autocorrect.disableAutocorrect` | `false` | Stop automatic Enter line fixes; fix on demand only (tutorial 16) |
 | `autocorrect.profiles` | package default (6 profiles) | Named LLM endpoints in **User** settings (tutorial 11). First install seeds User settings when unset. Avoid Workspace unless the project needs different endpoints. |
 | `autocorrect.activeProfile` | `groq` | Active profile id |
-| `autocorrect.llm.reasoningMode` | `off` | Global fallback when a profile omits `reasoningMode` (`off` \| `log`) |
 | `autocorrect.guardian.enabled` | `false` | Score fix/paste replies with Granite Guardian before apply |
 | `autocorrect.guardian.profileId` | `guardian` | Judge profile (default `:8081`) |
 | `autocorrect.guardian.maxRetries` | `1` | Extra fixer regenerations after Guardian `no` |

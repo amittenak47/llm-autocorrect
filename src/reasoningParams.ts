@@ -89,11 +89,8 @@ function localOpenAiExtras(profile: LlmProfileConfig, mode: ReasoningMode): Reco
 }
 
 /** Provider-specific request fields for reasoning off vs log. */
-export function buildReasoningExtras(
-  profile: LlmProfileConfig,
-  globalMode?: ReasoningMode
-): ReasoningRequestExtras {
-  const mode = effectiveReasoningMode(profile, globalMode);
+export function buildReasoningExtras(profile: LlmProfileConfig): ReasoningRequestExtras {
+  const mode = effectiveReasoningMode(profile);
   const extras: ReasoningRequestExtras = {};
 
   if (profile.provider === "groq") {

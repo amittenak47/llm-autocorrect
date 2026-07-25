@@ -504,12 +504,6 @@
           "default": "groq",
           "description": "Active LLM profile id from autocorrect.profiles."
         },
-        "autocorrect.llm.reasoningMode": {
-          "type": "string",
-          "enum": ["off", "log"],
-          "default": "off",
-          "description": "Global fallback when a profile omits reasoningMode. off = apply from content only; log = write reasoning to Output (never applied)."
-        },
         "autocorrect.profiles": {
           "type": "array",
           "default": [

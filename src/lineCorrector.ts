@@ -329,7 +329,7 @@ export class LineCorrector implements vscode.Disposable {
             `Never add explanations, quotes, or code fences. ` +
             `Never rewrite working code stylistically — fix mistakes only.`,
           user: finalUser,
-          maxTokens: effectiveMaxTokensLine(llmProfile, c.reasoningMode),
+          maxTokens: effectiveMaxTokensLine(llmProfile),
           signal: abort.signal,
           profileId: llmProfile.id,
           kind: "fix",

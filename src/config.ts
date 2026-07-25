@@ -4,7 +4,6 @@ import {
   DEFAULT_CONTEXT_TIERS,
   LlmProfileConfig,
   NearbyMode,
-  ReasoningMode,
   SignatureDepth,
   resolveProfiles,
 } from "./profiles";
@@ -53,7 +52,6 @@ export function cfg() {
     signatureDepth: c.get<SignatureDepth>("context.signatureDepth", "chain"),
     defaultTiers: { ...DEFAULT_CONTEXT_TIERS, ...defaultTiers } as ContextTiers,
     debug: c.get<boolean>("debug", false),
-    reasoningMode: c.get<ReasoningMode>("llm.reasoningMode", "off"),
     timeoutMs: c.get<number>("timeoutMs", 0),
     queueEnabled: c.get<boolean>("queue.enabled", false),
     queueMode: c.get<QueueMode>("queue.mode", "reviewChanges"),
