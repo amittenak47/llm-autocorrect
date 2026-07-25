@@ -5,6 +5,7 @@ import { PROFILES, detectLanguage, LanguageProfile } from "./languages";
 import { LlmRouter } from "./llmRouter";
 import { stripFences } from "./llm";
 import { looksLikeFaithfulTranslation } from "./pasteQuality";
+import { GuardianRejectedError } from "./guardianJudge";
 import { StatusBar } from "./statusBar";
 
 /** Languages close enough that offering a "translation" would be noise. */
@@ -149,13 +150,34 @@ export class PasteTranslator implements vscode.Disposable {
           user,
           maxTokens: 2048,
           signal: new AbortController().signal,
+          kind: "paste",
+          judgeOriginal: sourceText,
         })
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.output.appendLine(`[paste] ${msg}`);
-      void vscode.window.showErrorMessage(`Autocorrect: translation failed — ${msg}`);
-      return;
+      if (err instanceof GuardianRejectedError) {
+        this.output.appendLine(`[paste] guardian rejected — logged candidate`);
+        this.output.appendLine(`[paste] candidate:\n${err.candidate.slice(0, 1200)}`);
+        const action = await vscode.window.showWarningMessage(
+          "Autocorrect: Guardian rejected the translation — not applying.",
+          "Show in Output",
+          "Force apply"
+        );
+        if (action === "Show in Output") {
+          this.output.show(true);
+          return;
+        }
+        if (action === "Force apply") {
+          response = err.candidate;
+        } else {
+          return;
+        }
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.output.appendLine(`[paste] ${msg}`);
+        void vscode.window.showErrorMessage(`Autocorrect: translation failed — ${msg}`);
+        return;
+      }
     }
 
     const translated = stripFences(response).replace(/\r/g, "").replace(/\n$/, "");

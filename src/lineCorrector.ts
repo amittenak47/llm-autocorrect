@@ -6,6 +6,7 @@ import { shouldFixLine, resolveLineFixTarget, previousNonBlankLine } from "./dia
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
 import { FixQueue, QueuedFix } from "./fixQueue";
 import { LlmRouter } from "./llmRouter";
+import { GuardianRejectedError } from "./guardianJudge";
 import { lineFixUserMessage } from "./promptContext";
 import {
   fixForSingleLineTarget,
@@ -331,10 +332,33 @@ export class LineCorrector implements vscode.Disposable {
           maxTokens: effectiveMaxTokensLine(llmProfile, c.reasoningMode),
           signal: abort.signal,
           profileId: llmProfile.id,
+          kind: "fix",
+          judgeOriginal: original,
         })
       );
     } catch (err) {
       if (!abort.signal.aborted) {
+        if (err instanceof GuardianRejectedError) {
+          this.output.appendLine(`[line] guardian rejected — logged candidate`);
+          this.output.appendLine(`[line] candidate:\n${err.candidate.slice(0, 1200)}`);
+          if (cfg().onReject === "softApply") {
+            const corrected = preserveLeadingIndent(
+              original,
+              fixForSingleLineTarget(modelLines(err.candidate)) ?? err.candidate
+            );
+            if (corrected && corrected !== original) {
+              await this.queue.applyChange(doc, line, line, original, corrected, {
+                profileId: llmProfile.id,
+                op: "fix",
+                label: `line ${line + 1} (soft)`,
+              });
+              this.output.appendLine(
+                `[line] soft-applied guardian-rejected fix (revert via Remove or Revert at Cursor)`
+              );
+            }
+          }
+          return;
+        }
         this.output.appendLine(`[line] ${err instanceof Error ? err.message : String(err)}`);
       }
       return;

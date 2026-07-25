@@ -4,6 +4,14 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-25
+
+### Added
+
+- **Granite Guardian judge** — optional second server scores fix/paste candidates (`autocorrect.guardian.enabled`). On `no`, regenerate once; still rejected → log (and optional `softApply`).
+- Built-in **`guardian`** profile (`http://127.0.0.1:8081/v1`) alongside renamed **Granite 4.1 8B** local fixer.
+- README: **llama-cli** download + dual `llama-server` serve for fixer/Guardian.
+
 ## [0.2.6] - 2026-07-25
 
 ### Fixed

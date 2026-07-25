@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -554,7 +554,7 @@
             },
             {
               "id": "local",
-              "label": "llama-server",
+              "label": "Granite 4.1 8B",
               "provider": "openai-compatible",
               "baseUrl": "http://127.0.0.1:8080/v1",
               "model": "local",
@@ -566,6 +566,20 @@
               "maxTokensLine": 2048,
               "maxTokensBlock": 2048,
               "color": "#fb923c"
+            },
+            {
+              "id": "guardian",
+              "label": "Granite Guardian 4.1",
+              "provider": "openai-compatible",
+              "baseUrl": "http://127.0.0.1:8081/v1",
+              "model": "local",
+              "contextPolicy": "minimal",
+              "timeoutMs": 15000,
+              "maxConcurrent": 1,
+              "reasoningMode": "off",
+              "reasoningEffort": "none",
+              "maxTokensLine": 256,
+              "color": "#94a3b8"
             },
             {
               "id": "ollama",
@@ -582,7 +596,7 @@
               "color": "#f472b6"
             }
           ],
-          "description": "Named LLM profiles. Prefer User settings (not Workspace). Package default is groq/gemini/anthropic/local/ollama; first activation seeds User settings when profiles are unset.",
+          "description": "Named LLM profiles. Prefer User settings (not Workspace). Package default is groq/gemini/anthropic/local/guardian/ollama; first activation seeds User settings when profiles are unset.",
           "items": {
             "type": "object",
             "properties": {
@@ -664,6 +678,28 @@
           "type": "boolean",
           "default": false,
           "description": "Enter queue mode: Enter-triggered autocorrect queues instead of applying immediately. Behavior follows autocorrect.queue.mode (reviewChanges = review edits on Q; deferExecution = run tasks on Q)."
+        },
+        "autocorrect.guardian.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "After each fix/paste reply, score with Granite Guardian (profile autocorrect.guardian.profileId). On 'no', regenerate once then skip or soft-apply per autocorrect.apply.onReject."
+        },
+        "autocorrect.guardian.profileId": {
+          "type": "string",
+          "default": "guardian",
+          "description": "Profile id for the Guardian judge (default: guardian on http://127.0.0.1:8081/v1)."
+        },
+        "autocorrect.guardian.maxRetries": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "description": "Extra fixer regenerations after a Guardian 'no' (default 1)."
+        },
+        "autocorrect.apply.onReject": {
+          "type": "string",
+          "enum": ["skip", "softApply"],
+          "default": "skip",
+          "description": "When Guardian still rejects after retries: skip (log only) or softApply (apply with soft label so you can revert)."
         }
       }
     }

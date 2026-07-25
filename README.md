@@ -338,7 +338,7 @@ Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extend
 }
 ```
 
-If `profiles` is unset, the package default is: `groq`, `gemini`, `anthropic`, `local`, `ollama`. On first activation the extension also **writes those into User settings** so they appear in Settings JSON (not Workspace — API endpoints are personal).
+If `profiles` is unset, the package default is: `groq`, `gemini`, `anthropic`, `local` (Granite 4.1), `guardian`, `ollama`. On first activation the extension also **writes those into User settings** so they appear in Settings JSON (not Workspace — API endpoints are personal).
 
 Set API key per cloud profile: **Autocorrect: Set API Key**. Localhost needs no key.
 
@@ -359,6 +359,37 @@ llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080
 ```
 
 Use an **instruct/chat** model via `/v1/chat/completions`. Timeout defaults to **60s** on localhost when `timeoutMs` is `0`. Line fixes default to **2048** `max_tokens` on localhost (override with `maxTokensLine`).
+
+#### Granite 4.1 + Guardian (llama-cli download)
+
+From a shell where `llama-cli` / `llama-server` are on your PATH (e.g. `C:\Users\Amit\llama.cpp`):
+
+```bat
+REM Download (caches GGUF; short ping run)
+llama-cli -hf ibm-granite/granite-4.1-8b-GGUF:Q8_0 -p "ping" -n 8
+llama-cli -hf ibm-granite/granite-4.1-8b-GGUF:Q4_K_M -p "ping" -n 8
+llama-cli -hf ibm-granite/granite-guardian-4.1-8b-GGUF:Q4_K_M -p "ping" -n 8
+```
+
+Serve fixer on **8080** and Guardian on **8081** (two terminals):
+
+```bat
+REM Q8 fixer (~9GB) — or swap :Q8_0 for :Q4_K_M
+llama-server -hf ibm-granite/granite-4.1-8b-GGUF:Q8_0 --host 127.0.0.1 --port 8080 -c 16384
+
+llama-server -hf ibm-granite/granite-guardian-4.1-8b-GGUF:Q4_K_M --host 127.0.0.1 --port 8081 -c 8192
+```
+
+In settings: set `autocorrect.activeProfile` to `"local"`, then enable the judge:
+
+```json
+"autocorrect.guardian.enabled": true,
+"autocorrect.guardian.profileId": "guardian",
+"autocorrect.guardian.maxRetries": 1,
+"autocorrect.apply.onReject": "skip"
+```
+
+`onReject: "softApply"` applies a rejected fix with a soft label so you can revert. Judge failures fail-open (accept the candidate).
 
 ---
 
@@ -511,9 +542,13 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | --- | --- | --- |
 | `autocorrect.enabled` | `true` | Master switch |
 | `autocorrect.disableAutocorrect` | `false` | Stop automatic Enter line fixes; fix on demand only (tutorial 16) |
-| `autocorrect.profiles` | package default (5 profiles) | Named LLM endpoints in **User** settings (tutorial 11). First install seeds User settings when unset. Avoid Workspace unless the project needs different endpoints. |
+| `autocorrect.profiles` | package default (6 profiles) | Named LLM endpoints in **User** settings (tutorial 11). First install seeds User settings when unset. Avoid Workspace unless the project needs different endpoints. |
 | `autocorrect.activeProfile` | `groq` | Active profile id |
 | `autocorrect.llm.reasoningMode` | `off` | Global fallback when a profile omits `reasoningMode` (`off` \| `log`) |
+| `autocorrect.guardian.enabled` | `false` | Score fix/paste replies with Granite Guardian before apply |
+| `autocorrect.guardian.profileId` | `guardian` | Judge profile (default `:8081`) |
+| `autocorrect.guardian.maxRetries` | `1` | Extra fixer regenerations after Guardian `no` |
+| `autocorrect.apply.onReject` | `skip` | After final reject: `skip` (log) or `softApply` (apply + revert) |
 | `autocorrect.provider` | `groq` | **Legacy** — only if `profiles` is empty |
 | `autocorrect.model` | `""` | **Legacy** model id |
 | `autocorrect.baseUrl` | `""` | **Legacy** openai-compatible URL |

@@ -29,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   llm.setOutput(output);
   const profileConcurrency = new ProfileConcurrency();
   const router = new LlmRouter(llm, profileConcurrency);
+  router.setOutput(output);
   const contextAsm = new ContextAssemblerService();
   const stageDeco = new StageDecorations();
   const fixQueue = new FixQueue(statusBar, output);

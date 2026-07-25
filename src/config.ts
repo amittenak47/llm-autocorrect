@@ -10,6 +10,7 @@ import {
 } from "./profiles";
 
 export type QueueMode = "reviewChanges" | "deferExecution";
+export type OnRejectMode = "skip" | "softApply";
 
 export function cfg() {
   const c = vscode.workspace.getConfiguration("autocorrect");
@@ -56,6 +57,10 @@ export function cfg() {
     timeoutMs: c.get<number>("timeoutMs", 0),
     queueEnabled: c.get<boolean>("queue.enabled", false),
     queueMode: c.get<QueueMode>("queue.mode", "reviewChanges"),
+    guardianEnabled: c.get<boolean>("guardian.enabled", false),
+    guardianProfileId: c.get<string>("guardian.profileId", "guardian"),
+    guardianMaxRetries: c.get<number>("guardian.maxRetries", 1),
+    onReject: c.get<OnRejectMode>("apply.onReject", "skip"),
     profiles,
     activeProfile,
     // Legacy — used when profiles array is empty fallback only

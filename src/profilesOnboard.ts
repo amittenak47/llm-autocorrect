@@ -57,6 +57,6 @@ export async function maybeSeedDefaultProfiles(
 
   await context.globalState.update(STATE_KEY, true);
   output.appendLine(
-    `[onboard] seeded User settings with ${DEFAULT_PROFILES.length} default profiles (groq, gemini, anthropic, local, ollama)`
+    `[onboard] seeded User settings with ${DEFAULT_PROFILES.length} default profiles (groq, gemini, anthropic, local, guardian, ollama)`
   );
 }

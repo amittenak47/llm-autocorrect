@@ -67,6 +67,7 @@ export const PROFILE_COLORS = [
   "#a78bfa",
   "#fb923c",
   "#f472b6",
+  "#94a3b8",
 ];
 
 /** Built-in profiles when autocorrect.profiles is empty (set API keys per provider). */
@@ -112,7 +113,7 @@ export const DEFAULT_PROFILES: LlmProfileConfig[] = [
   },
   {
     id: "local",
-    label: "llama-server",
+    label: "Granite 4.1 8B",
     provider: "openai-compatible",
     baseUrl: "http://127.0.0.1:8080/v1",
     model: "local",
@@ -124,6 +125,20 @@ export const DEFAULT_PROFILES: LlmProfileConfig[] = [
     maxTokensLine: 2048,
     maxTokensBlock: 2048,
     color: PROFILE_COLORS[3],
+  },
+  {
+    id: "guardian",
+    label: "Granite Guardian 4.1",
+    provider: "openai-compatible",
+    baseUrl: "http://127.0.0.1:8081/v1",
+    model: "local",
+    contextPolicy: "minimal",
+    timeoutMs: 15000,
+    maxConcurrent: 1,
+    reasoningMode: "off",
+    reasoningEffort: "none",
+    maxTokensLine: 256,
+    color: PROFILE_COLORS[5],
   },
   {
     id: "ollama",

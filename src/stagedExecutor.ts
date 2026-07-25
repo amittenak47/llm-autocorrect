@@ -12,6 +12,7 @@ import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { isCommentOrBlank, LanguageProfile, PROFILES } from "./languages";
 import { LlmRouter } from "./llmRouter";
+import { GuardianRejectedError } from "./guardianJudge";
 import { offerRejectRecovery, reportOutcome } from "./outcomes";
 import { blockFixUserMessage } from "./promptContext";
 import {
@@ -133,9 +134,41 @@ export class StagedExecutor {
           maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(text), cfg().reasoningMode),
           signal: new AbortController().signal,
           profileId: llmProfile.id,
+          kind: attrs.op === "fix" ? "fix" : "raw",
+          judgeOriginal: attrs.op === "fix" ? text : undefined,
         })
       );
     } catch (err) {
+      if (err instanceof GuardianRejectedError) {
+        this.output.appendLine(`[staged] guardian rejected — logged candidate`);
+        reportOutcome("guardian rejected correction — see Output", {
+          kind: "error",
+          output: this.output,
+          statusBar: this.statusBar,
+          logPrefix: "[staged]",
+          modelText: err.candidate,
+        });
+        if (cfg().onReject === "softApply") {
+          const applied = await this.queue.applyChange(
+            doc,
+            blockRange.start.line,
+            blockRange.end.line,
+            text,
+            normalizeModelText(err.candidate),
+            { profileId: llmProfile.id, op: attrs.op, label: `${queueLabel} (soft)` }
+          );
+          if (applied) {
+            reportOutcome("soft-applied rejected fix (revert at cursor)", {
+              kind: "ok",
+              output: this.output,
+              statusBar: this.statusBar,
+              logPrefix: "[staged]",
+            });
+            return { ok: true };
+          }
+        }
+        return { ok: false };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       reportOutcome(`failed — ${msg}`, {
         kind: "error",
