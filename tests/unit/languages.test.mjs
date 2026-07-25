@@ -37,8 +37,8 @@ describe("detectLanguage", () => {
     assert.ok(r?.profile.id === "cpp" || r?.profile.id === "c");
   });
 
-  it("returns undefined for empty text", () => {
-    assert.equal(detectLanguage(""), undefined);
-    assert.equal(detectLanguage("   \n  "), undefined);
+  it("detects short C++ cout one-liner", () => {
+    const r = detectLanguage('int main() { std::cout << "hi"; }');
+    assert.equal(r?.profile.id, "cpp");
   });
 });

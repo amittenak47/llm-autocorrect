@@ -74,10 +74,14 @@ def greet(name):
     pritn(f"hi {name}")
 
 # =============================================================================
-# CASE 9: paste-translate (separate feature) — paste C++ snippet below into this file
-# Should offer to convert to Python (not line autocorrect)
+# CASE 9: paste-translate (separate feature)
+# Paste a REAL C++ snippet (not a comment), e.g.:
+#   int main() {
+#     std::cout << "hi";
+#     return 0;
+#   }
+# Expect offer to convert → Python like print("hi") / a small main — NOT greet().
 # =============================================================================
-# int main() { std::cout << "hi"; }
 
 # =============================================================================
 # CASE 10: manual-only quick check

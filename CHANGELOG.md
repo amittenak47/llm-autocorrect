@@ -4,6 +4,12 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-07-25
+
+### Fixed
+
+- **Paste-translate fidelity** — stricter translate-only prompt; reject replies that invent unrelated identifiers (e.g. `greet` for a `std::cout` paste). Short foreign one-liners can trigger detection.
+
 ## [0.2.5] - 2026-07-25
 
 ### Fixed

@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
-import { withUserContext } from "./promptContext";
+import { globalPromptPrefix } from "./promptContext";
 import { PROFILES, detectLanguage, LanguageProfile } from "./languages";
 import { LlmRouter } from "./llmRouter";
 import { stripFences } from "./llm";
+import { looksLikeFaithfulTranslation } from "./pasteQuality";
 import { StatusBar } from "./statusBar";
 
 /** Languages close enough that offering a "translation" would be noise. */
@@ -52,7 +53,11 @@ export class PasteTranslator implements vscode.Disposable {
       return;
     }
     const change = e.contentChanges[0];
-    if (change.text.length < 40 || !change.text.includes("\n")) {
+    // Allow short single-line foreign snippets (e.g. `int main(){ std::cout<<"hi"; }`).
+    if (change.text.length < 20) {
+      return;
+    }
+    if (!change.text.includes("\n") && change.text.length < 28) {
       return;
     }
 
@@ -119,16 +124,29 @@ export class PasteTranslator implements vscode.Disposable {
     sourceName: string,
     target: LanguageProfile
   ): Promise<void> {
+    const prefix = globalPromptPrefix();
+    const user =
+      (prefix ? `Project note (style only — do not invent code from it):\n${prefix}\n\n` : "") +
+      `SOURCE language: ${sourceName}\n` +
+      `TARGET language: ${target.name}\n\n` +
+      `Translate ONLY the SOURCE snippet below into idiomatic ${target.name}.\n` +
+      `Rules:\n` +
+      `- Preserve behavior and string literals from the SOURCE.\n` +
+      `- Do not invent new function/variable names that are not implied by the SOURCE.\n` +
+      `- Do not include other file contents, comments about the file, or unrelated helpers.\n` +
+      `- Reply with ONLY the translated ${target.name} code — no fences, no prose.\n\n` +
+      `SOURCE:\n${sourceText}`;
+
     let response: string;
     try {
       response = await this.statusBar.withBusy(() =>
         this.router.complete({
           system:
-            `You translate code between programming languages. ` +
-            `Convert the given ${sourceName} code to idiomatic ${target.name}. ` +
-            `Preserve behavior, names, and comments. ` +
-            `Reply with ONLY the translated ${target.name} code — no code fences, no explanations.`,
-          user: withUserContext(`Code to translate:\n${sourceText}`),
+            `You are a literal code translator from ${sourceName} to ${target.name}. ` +
+            `You convert the given SOURCE snippet and nothing else. ` +
+            `If SOURCE is a tiny main/print example, output a tiny ${target.name} equivalent. ` +
+            `Never substitute a different program.`,
+          user,
           maxTokens: 2048,
           signal: new AbortController().signal,
         })
@@ -140,11 +158,32 @@ export class PasteTranslator implements vscode.Disposable {
       return;
     }
 
-    const translated = stripFences(response);
+    const translated = stripFences(response).replace(/\r/g, "").replace(/\n$/, "");
     if (translated.trim().length === 0) {
       void vscode.window.showWarningMessage("Autocorrect: the model returned no code — not converting.");
       return;
     }
+
+    if (!looksLikeFaithfulTranslation(sourceText, translated)) {
+      this.output.appendLine(
+        `[paste] rejected unfaithful translation\n` +
+          `  source: ${JSON.stringify(sourceText.slice(0, 120))}\n` +
+          `  model:  ${JSON.stringify(translated.slice(0, 200))}`
+      );
+      const action = await vscode.window.showWarningMessage(
+        "Autocorrect: model reply does not look like a translation of the pasted code — not applying.",
+        "Show in Output",
+        "Force apply"
+      );
+      if (action === "Show in Output") {
+        this.output.show(true);
+        return;
+      }
+      if (action !== "Force apply") {
+        return;
+      }
+    }
+
     // Final buffer check right before the edit.
     if (doc.isClosed || doc.getText(range) !== sourceText) {
       void vscode.window.showWarningMessage(

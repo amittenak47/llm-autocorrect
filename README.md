@@ -458,9 +458,9 @@ Status bar shows **`Autocorrect (manual)`** while Enter autocorrect is off.
 
 **When:** You pasted code in the wrong language.
 
-1. Paste a block that looks like a different language than the file.
-2. Extension offers to translate — accept or dismiss.
-3. Never replaces without confirmation.
+1. Paste a block that looks like a different language than the file (uncommented — a `# int main…` Python comment will not detect as C++).
+2. Extension offers to convert — accept or dismiss.
+3. Never replaces without confirmation. Replies that invent unrelated names (e.g. `greet` for a `cout` snippet) are rejected unless you **Force apply**.
 
 Palette: **`Autocorrect: Translate Selection`**.
 
