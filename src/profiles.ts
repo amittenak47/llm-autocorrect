@@ -1,9 +1,12 @@
 import { CLOUD_DEFAULT_TIMEOUT_MS, LOCAL_DEFAULT_TIMEOUT_MS, isLocalBaseUrl } from "./localUrl";
+import { defaultReasoningEffort } from "./reasoningParams";
 
 export type ContextPolicy = "minimal" | "standard" | "extended";
 export type LlmProviderKind = "groq" | "gemini" | "anthropic" | "openai-compatible";
 export type NearbyMode = "indentScope" | "window";
 export type SignatureDepth = "header" | "chain";
+export type ReasoningMode = "off" | "log";
+export type ReasoningEffort = "none" | "default" | "low" | "medium" | "high";
 
 export interface ContextTiers {
   nearby: boolean;
@@ -48,6 +51,14 @@ export interface LlmProfileConfig {
   /** Max concurrent LLM requests for this profile (default: 1 local, 2 cloud). */
   maxConcurrent?: number;
   color?: string;
+  /** off = minimize reasoning tokens; log = capture reasoning in Output (never applied). */
+  reasoningMode?: ReasoningMode;
+  /** Provider-specific effort when the model supports it (Groq reasoning models, Anthropic adaptive). */
+  reasoningEffort?: ReasoningEffort;
+  /** Override line-fix max_tokens (default higher for local / reasoning log). */
+  maxTokensLine?: number;
+  /** Floor for block-fix max_tokens when reasoning log is on. */
+  maxTokensBlock?: number;
 }
 
 export const PROFILE_COLORS = [
@@ -57,6 +68,129 @@ export const PROFILE_COLORS = [
   "#fb923c",
   "#f472b6",
 ];
+
+/** Built-in profiles when autocorrect.profiles is empty (set API keys per provider). */
+export const DEFAULT_PROFILES: LlmProfileConfig[] = [
+  {
+    id: "groq",
+    label: "Groq",
+    provider: "groq",
+    model: "llama-3.1-8b-instant",
+    contextPolicy: "minimal",
+    timeoutMs: 5000,
+    maxConcurrent: 2,
+    reasoningMode: "off",
+    reasoningEffort: "none",
+    maxTokensLine: 300,
+    color: PROFILE_COLORS[0],
+  },
+  {
+    id: "gemini",
+    label: "Gemini",
+    provider: "gemini",
+    model: "gemini-2.5-flash-lite",
+    contextPolicy: "minimal",
+    timeoutMs: 5000,
+    maxConcurrent: 2,
+    reasoningMode: "off",
+    reasoningEffort: "none",
+    maxTokensLine: 300,
+    color: PROFILE_COLORS[1],
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    provider: "anthropic",
+    model: "claude-haiku-4-5-20251001",
+    contextPolicy: "minimal",
+    timeoutMs: 5000,
+    maxConcurrent: 2,
+    reasoningMode: "off",
+    reasoningEffort: "none",
+    maxTokensLine: 300,
+    color: PROFILE_COLORS[2],
+  },
+  {
+    id: "local",
+    label: "llama-server",
+    provider: "openai-compatible",
+    baseUrl: "http://127.0.0.1:8080/v1",
+    model: "local",
+    contextPolicy: "extended",
+    timeoutMs: 60000,
+    maxConcurrent: 1,
+    reasoningMode: "log",
+    reasoningEffort: "default",
+    maxTokensLine: 1024,
+    maxTokensBlock: 2048,
+    color: PROFILE_COLORS[3],
+  },
+  {
+    id: "ollama",
+    label: "Ollama",
+    provider: "openai-compatible",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    model: "llama3.2",
+    contextPolicy: "extended",
+    timeoutMs: 60000,
+    maxConcurrent: 1,
+    reasoningMode: "off",
+    reasoningEffort: "none",
+    maxTokensLine: 512,
+    color: PROFILE_COLORS[4],
+  },
+];
+
+export function normalizeProfile(profile: LlmProfileConfig): LlmProfileConfig {
+  return {
+    ...profile,
+    reasoningEffort: profile.reasoningEffort ?? defaultReasoningEffort(profile),
+  };
+}
+
+export function effectiveReasoningMode(
+  profile: LlmProfileConfig,
+  globalMode?: ReasoningMode
+): ReasoningMode {
+  if (profile.reasoningMode !== undefined) {
+    return profile.reasoningMode;
+  }
+  return globalMode ?? "off";
+}
+
+export function effectiveMaxTokensLine(
+  profile: LlmProfileConfig,
+  globalMode?: ReasoningMode
+): number {
+  if (profile.maxTokensLine && profile.maxTokensLine > 0) {
+    return profile.maxTokensLine;
+  }
+  const local =
+    profile.provider === "openai-compatible" && isLocalBaseUrl(profile.baseUrl ?? "");
+  if (local) {
+    // Reasoning models (llama-server, Qwen, etc.) burn output budget before content.
+    return 1024;
+  }
+  return effectiveReasoningMode(profile, globalMode) === "log" ? 512 : 300;
+}
+
+export function effectiveMaxTokensBlock(
+  profile: LlmProfileConfig,
+  estimated: number,
+  globalMode?: ReasoningMode
+): number {
+  const floor = profile.maxTokensBlock ?? 0;
+  if (floor > 0) {
+    return Math.max(estimated, floor);
+  }
+  if (
+    profile.provider === "openai-compatible" &&
+    isLocalBaseUrl(profile.baseUrl ?? "")
+  ) {
+    return Math.max(estimated, 2048);
+  }
+  return estimated;
+}
 
 export function tokenBudgetForPolicy(policy: ContextPolicy): number {
   switch (policy) {
@@ -93,6 +227,24 @@ export function defaultMaxConcurrent(profile: LlmProfileConfig): number {
   return 2;
 }
 
+/** Resolve profile list: explicit settings, legacy single profile, or DEFAULT_PROFILES. */
+export function resolveProfiles(
+  configured: LlmProfileConfig[],
+  legacyProvider: string,
+  legacyModel: string,
+  legacyBaseUrl: string
+): LlmProfileConfig[] {
+  if (configured.length > 0) {
+    return configured.map(normalizeProfile);
+  }
+  const hasLegacy =
+    legacyProvider !== "groq" || legacyModel !== "" || legacyBaseUrl !== "";
+  if (hasLegacy) {
+    return migrateLegacyProfile(legacyProvider, legacyModel, legacyBaseUrl).map(normalizeProfile);
+  }
+  return DEFAULT_PROFILES.map(normalizeProfile);
+}
+
 /** Build default profile list from legacy single-provider settings. */
 export function migrateLegacyProfile(
   provider: string,
@@ -107,6 +259,10 @@ export function migrateLegacyProfile(
     baseUrl: baseUrl || undefined,
     contextPolicy:
       provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? "extended" : "minimal",
+    reasoningMode:
+      provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? "log" : "off",
+    maxTokensLine:
+      provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? 1024 : 300,
   };
-  return [p];
+  return [normalizeProfile(p)];
 }

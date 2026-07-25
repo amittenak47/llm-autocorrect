@@ -25,6 +25,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBar = new StatusBar();
   const flash = new Flash();
   const llm = new LlmClient(context.secrets);
+  llm.setOutput(output);
   const profileConcurrency = new ProfileConcurrency();
   const router = new LlmRouter(llm, profileConcurrency);
   const contextAsm = new ContextAssemblerService();

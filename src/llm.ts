@@ -1,7 +1,14 @@
 import * as vscode from "vscode";
-import { activeLlmProfile } from "./config";
+import { activeLlmProfile, cfg } from "./config";
+import {
+  parseAnthropicResponse,
+  parseGeminiResponse,
+  parseOpenAiChatResponse,
+  ParsedLlmResponse,
+} from "./llmResponse";
 import { capMaxTokens } from "./promptLimits";
-import { LlmProfileConfig } from "./profiles";
+import { effectiveReasoningMode, LlmProfileConfig } from "./profiles";
+import { buildReasoningExtras } from "./reasoningParams";
 import { stripFences } from "./textUtils";
 
 export { stripFences } from "./textUtils";
@@ -20,6 +27,8 @@ const PROVIDER_DEFAULTS: Record<string, { model: string }> = {
   "openai-compatible": { model: "local" },
 };
 
+const REASONING_LOG_MAX = 2000;
+
 export function secretKeyFor(provider: string): string {
   return `autocorrect.apiKey.${provider}`;
 }
@@ -29,7 +38,13 @@ export function secretKeyForProfile(profileId: string, provider: string): string
 }
 
 export class LlmClient {
+  private output?: vscode.OutputChannel;
+
   constructor(private readonly secrets: vscode.SecretStorage) {}
+
+  setOutput(output: vscode.OutputChannel): void {
+    this.output = output;
+  }
 
   /** Legacy single-provider path. */
   async complete(req: LlmRequest): Promise<string> {
@@ -52,34 +67,92 @@ export class LlmClient {
     }
 
     const maxTokens = capMaxTokens(profile.provider, req.maxTokens, req.system, req.user);
+    const globalMode = cfg().reasoningMode;
+    const reasoningExtras = buildReasoningExtras(profile, globalMode);
 
     switch (profile.provider) {
       case "groq":
-        return this.openAiChat(
-          "https://api.groq.com/openai/v1/chat/completions",
-          apiKey!,
-          model,
-          { ...req, maxTokens },
-          req.signal
+        return this.finishParsed(
+          profile,
+          await this.openAiChat(
+            "https://api.groq.com/openai/v1/chat/completions",
+            apiKey!,
+            model,
+            profile,
+            { ...req, maxTokens },
+            reasoningExtras.openAiBody,
+            req.signal
+          )
         );
       case "openai-compatible": {
         if (!profile.baseUrl) {
           throw new Error(`Profile "${profile.id}" needs baseUrl (e.g. http://127.0.0.1:8080/v1).`);
         }
-        return this.openAiChat(
-          `${profile.baseUrl.replace(/\/+$/, "")}/chat/completions`,
-          apiKey ?? "",
-          model,
-          { ...req, maxTokens },
-          req.signal
+        return this.finishParsed(
+          profile,
+          await this.openAiChat(
+            `${profile.baseUrl.replace(/\/+$/, "")}/chat/completions`,
+            apiKey ?? "",
+            model,
+            profile,
+            { ...req, maxTokens },
+            reasoningExtras.openAiBody,
+            req.signal
+          )
         );
       }
       case "gemini":
-        return this.gemini(apiKey!, model, { ...req, maxTokens }, req.signal);
+        return this.finishParsed(
+          profile,
+          await this.gemini(
+            apiKey!,
+            model,
+            { ...req, maxTokens },
+            reasoningExtras.geminiGenerationConfig,
+            req.signal
+          )
+        );
       case "anthropic":
-        return this.anthropic(apiKey!, model, { ...req, maxTokens }, req.signal);
+        return this.finishParsed(
+          profile,
+          await this.anthropic(
+            apiKey!,
+            model,
+            profile,
+            { ...req, maxTokens },
+            reasoningExtras.anthropicBody,
+            req.signal
+          )
+        );
       default:
         throw new Error(`Unknown provider "${profile.provider}" on profile "${profile.id}".`);
+    }
+  }
+
+  private finishParsed(profile: LlmProfileConfig, parsed: ParsedLlmResponse): string {
+    this.emitReasoning(profile, parsed);
+    return parsed.content;
+  }
+
+  private emitReasoning(profile: LlmProfileConfig, parsed: ParsedLlmResponse): void {
+    const globalMode = cfg().reasoningMode;
+    const mode = effectiveReasoningMode(profile, globalMode);
+    const debug = cfg().debug;
+
+    if (parsed.reasoning && (mode === "log" || debug)) {
+      const snip =
+        parsed.reasoning.length > REASONING_LOG_MAX
+          ? parsed.reasoning.slice(0, REASONING_LOG_MAX) + "…"
+          : parsed.reasoning;
+      this.output?.appendLine(`[llm:${profile.id}:reasoning] ${snip}`);
+    }
+
+    if (!parsed.content.trim() && parsed.reasoning) {
+      this.output?.appendLine(
+        `[llm:${profile.id}] empty content — reasoning consumed tokens` +
+          (parsed.finishReason ? ` (finish=${parsed.finishReason})` : "") +
+          `. Try reasoningMode=off or raise maxTokensLine on profile "${profile.id}".`
+      );
     }
   }
 
@@ -87,9 +160,11 @@ export class LlmClient {
     url: string,
     apiKey: string,
     model: string,
+    profile: LlmProfileConfig,
     req: LlmRequest,
+    extraBody: Record<string, unknown> | undefined,
     signal: AbortSignal
-  ): Promise<string> {
+  ): Promise<ParsedLlmResponse> {
     const res = await fetch(url, {
       method: "POST",
       signal,
@@ -105,21 +180,23 @@ export class LlmClient {
           { role: "system", content: req.system },
           { role: "user", content: req.user },
         ],
+        ...extraBody,
       }),
     });
     if (!res.ok) {
       throw new Error(`LLM request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
     }
-    const data = (await res.json()) as any;
-    return data.choices?.[0]?.message?.content ?? "";
+    const data = await res.json();
+    return parseOpenAiChatResponse(data);
   }
 
   private async gemini(
     apiKey: string,
     model: string,
     req: LlmRequest,
+    extraGenerationConfig: Record<string, unknown> | undefined,
     signal: AbortSignal
-  ): Promise<string> {
+  ): Promise<ParsedLlmResponse> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const res = await fetch(url, {
       method: "POST",
@@ -128,23 +205,28 @@ export class LlmClient {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: req.system }] },
         contents: [{ role: "user", parts: [{ text: req.user }] }],
-        generationConfig: { maxOutputTokens: req.maxTokens, temperature: 0 },
+        generationConfig: {
+          maxOutputTokens: req.maxTokens,
+          temperature: 0,
+          ...extraGenerationConfig,
+        },
       }),
     });
     if (!res.ok) {
       throw new Error(`LLM request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
     }
-    const data = (await res.json()) as any;
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
-    return parts.map((p: any) => p.text ?? "").join("");
+    const data = await res.json();
+    return parseGeminiResponse(data);
   }
 
   private async anthropic(
     apiKey: string,
     model: string,
+    profile: LlmProfileConfig,
     req: LlmRequest,
+    extraBody: Record<string, unknown> | undefined,
     signal: AbortSignal
-  ): Promise<string> {
+  ): Promise<ParsedLlmResponse> {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal,
@@ -159,15 +241,13 @@ export class LlmClient {
         temperature: 0,
         system: req.system,
         messages: [{ role: "user", content: req.user }],
+        ...extraBody,
       }),
     });
     if (!res.ok) {
       throw new Error(`LLM request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
     }
-    const data = (await res.json()) as any;
-    return (data.content ?? [])
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join("");
+    const data = await res.json();
+    return parseAnthropicResponse(data);
   }
 }

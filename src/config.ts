@@ -4,8 +4,9 @@ import {
   DEFAULT_CONTEXT_TIERS,
   LlmProfileConfig,
   NearbyMode,
+  ReasoningMode,
   SignatureDepth,
-  migrateLegacyProfile,
+  resolveProfiles,
 } from "./profiles";
 
 export type QueueMode = "reviewChanges" | "deferExecution";
@@ -17,12 +18,14 @@ export function cfg() {
   const legacyBaseUrl = c.get<string>("baseUrl", "");
 
   const configuredProfiles = c.get<LlmProfileConfig[]>("profiles", []);
-  const profiles =
-    configuredProfiles.length > 0
-      ? configuredProfiles
-      : migrateLegacyProfile(legacyProvider, legacyModel, legacyBaseUrl);
+  const profiles = resolveProfiles(
+    configuredProfiles,
+    legacyProvider,
+    legacyModel,
+    legacyBaseUrl
+  );
 
-  const activeProfile = c.get<string>("activeProfile", profiles[0]?.id ?? "default");
+  const activeProfile = c.get<string>("activeProfile", profiles[0]?.id ?? "groq");
 
   const defaultTiers = c.get<Partial<ContextTiers>>("context.defaultTiers", {});
 
@@ -49,6 +52,7 @@ export function cfg() {
     signatureDepth: c.get<SignatureDepth>("context.signatureDepth", "chain"),
     defaultTiers: { ...DEFAULT_CONTEXT_TIERS, ...defaultTiers } as ContextTiers,
     debug: c.get<boolean>("debug", false),
+    reasoningMode: c.get<ReasoningMode>("llm.reasoningMode", "off"),
     timeoutMs: c.get<number>("timeoutMs", 0),
     queueEnabled: c.get<boolean>("queue.enabled", false),
     queueMode: c.get<QueueMode>("queue.mode", "reviewChanges"),

@@ -21,7 +21,7 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-## Features (v0.1.0)
+## Features (v0.2.0)
 
 | Feature | Summary |
 | --- | --- |
@@ -43,7 +43,7 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). |
 | **Local inference** | `openai-compatible` + localhost → **60s** default timeout. |
 
-See [CHANGELOG.md](CHANGELOG.md) for the full v0.1.0 release notes.
+See [CHANGELOG.md](CHANGELOG.md) for the full v0.2.0 release notes.
 
 You bring your own API key. Keys live in the editor's secret storage, not in settings files.
 

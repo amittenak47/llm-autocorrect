@@ -6,6 +6,16 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ### Added
 
+- **Reasoning mode** — per-profile `reasoningMode` (`off` | `log`) and `reasoningEffort` for Groq, Anthropic, Gemini, and local OpenAI-compatible servers. Reasoning is logged to Output when enabled; fixes always apply from `content` only.
+- **Built-in default profiles** — when `autocorrect.profiles` is empty: `groq`, `gemini`, `anthropic`, `local` (llama-server), `ollama`.
+- **Profile token budgets** — `maxTokensLine` / `maxTokensBlock` (localhost default 1024 line / 2048 block floor).
+
+## [0.2.0] - 2026-07-25
+
+Daily-use reliability and UX polish on the v0.1.0 workflow.
+
+### Added
+
 - **Cursor first-run prompt** — offers to set `line.requireDiagnostic: false` when Anysphere diagnostics would block Enter.
 - **Persistent mode key hint** on the status bar (menu / staged / capture) until Esc; click opens the command menu while in a mode.
 - **Reject recovery** for docs/caveman — Output shows model text; picker offers Copy / Force apply.
@@ -28,7 +38,7 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [0.1.0] - 2026-07-15
 
-First release after **0.0.3** — staged workflow, multi-profile LLM, queue modes, region lock, and revert ledger.
+First public release after **0.0.3** — staged workflow, multi-profile LLM, queue modes, region lock, and revert ledger. (Some in-repo release commits during development referred to this batch as 0.2.0 before the publish version was finalized as 0.1.0.)
 
 ### Added
 
@@ -57,7 +67,7 @@ First release after **0.0.3** — staged workflow, multi-profile LLM, queue mode
 ### Changed
 
 - Queue items store **op**, **context note**, and **profile**; review picker shows them.
-- Queue review discards unchecked items (previously only logged).
+- Queue review discards unchecked items (superseded in 0.2.0 — unchecked items now stay queued).
 - Removed capture-mode `Q` toggle — use staged `Shift+E` to enqueue.
 - Command palette hides internal key-only commands.
 - Op/modifier indicator: filled circle in the line-number gutter and inline before the first staged line.

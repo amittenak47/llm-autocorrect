@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { blockLineRange } from "./blockApply";
 import { blockMaxTokens } from "./blockMath";
 import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
+import { effectiveMaxTokensBlock } from "./profiles";
 import {
   ContextAssemblerService,
   formatBlockWithContext,
@@ -129,7 +130,7 @@ export class StagedExecutor {
         this.router.complete({
           system: this.systemPrompt(attrs.op, langProfile),
           user: userMsg,
-          maxTokens: blockMaxTokens(text),
+          maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(text), cfg().reasoningMode),
           signal: new AbortController().signal,
           profileId: llmProfile.id,
         })

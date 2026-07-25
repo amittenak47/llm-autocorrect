@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -501,13 +501,19 @@
         },
         "autocorrect.activeProfile": {
           "type": "string",
-          "default": "default",
+          "default": "groq",
           "description": "Active LLM profile id from autocorrect.profiles."
+        },
+        "autocorrect.llm.reasoningMode": {
+          "type": "string",
+          "enum": ["off", "log"],
+          "default": "off",
+          "description": "Global fallback when a profile omits reasoningMode. off = apply from content only; log = write reasoning to Output (never applied)."
         },
         "autocorrect.profiles": {
           "type": "array",
           "default": [],
-          "description": "Named LLM profiles. When empty, legacy provider/model/baseUrl settings are used as a single 'default' profile.",
+          "description": "Named LLM profiles. When empty, uses built-in defaults (groq, gemini, anthropic, local llama-server, ollama) unless legacy provider/model/baseUrl are set.",
           "items": {
             "type": "object",
             "properties": {
@@ -528,6 +534,24 @@
                 "type": "number",
                 "minimum": 1,
                 "description": "Max concurrent LLM requests for this profile (default: 1 for localhost, 2 for cloud)."
+              },
+              "reasoningMode": {
+                "type": "string",
+                "enum": ["off", "log"],
+                "description": "off = minimize reasoning tokens; log = capture reasoning in Output (never applied)."
+              },
+              "reasoningEffort": {
+                "type": "string",
+                "enum": ["none", "default", "low", "medium", "high"],
+                "description": "Provider-specific reasoning effort (Groq reasoning models, Anthropic adaptive thinking)."
+              },
+              "maxTokensLine": {
+                "type": "number",
+                "description": "Override max_tokens for Enter line fixes (default 300 cloud, 1024 localhost)."
+              },
+              "maxTokensBlock": {
+                "type": "number",
+                "description": "Floor for max_tokens on staged block fixes when reasoning is enabled."
               },
               "color": { "type": "string" }
             }

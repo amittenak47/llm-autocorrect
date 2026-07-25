@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
+import { effectiveMaxTokensLine } from "./profiles";
 import { ContextAssemblerService } from "./contextAssembler";
 import { shouldFixLine } from "./diagnosticGate";
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
@@ -313,7 +314,7 @@ export class LineCorrector implements vscode.Disposable {
             `Never add explanations, quotes, or code fences. ` +
             `Never rewrite working code stylistically — fix mistakes only.`,
           user: finalUser,
-          maxTokens: 300,
+          maxTokens: effectiveMaxTokensLine(llmProfile, c.reasoningMode),
           signal: abort.signal,
           profileId: llmProfile.id,
         })
