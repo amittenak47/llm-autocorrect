@@ -119,9 +119,9 @@ export const DEFAULT_PROFILES: LlmProfileConfig[] = [
     contextPolicy: "extended",
     timeoutMs: 60000,
     maxConcurrent: 1,
-    reasoningMode: "log",
+    reasoningMode: "off",
     reasoningEffort: "default",
-    maxTokensLine: 1024,
+    maxTokensLine: 2048,
     maxTokensBlock: 2048,
     color: PROFILE_COLORS[3],
   },
@@ -169,7 +169,7 @@ export function effectiveMaxTokensLine(
     profile.provider === "openai-compatible" && isLocalBaseUrl(profile.baseUrl ?? "");
   if (local) {
     // Reasoning models (llama-server, Qwen, etc.) burn output budget before content.
-    return 1024;
+    return 2048;
   }
   return effectiveReasoningMode(profile, globalMode) === "log" ? 512 : 300;
 }
@@ -259,10 +259,9 @@ export function migrateLegacyProfile(
     baseUrl: baseUrl || undefined,
     contextPolicy:
       provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? "extended" : "minimal",
-    reasoningMode:
-      provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? "log" : "off",
+    reasoningMode: "off",
     maxTokensLine:
-      provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? 1024 : 300,
+      provider === "openai-compatible" && isLocalBaseUrl(baseUrl) ? 2048 : 300,
   };
   return [normalizeProfile(p)];
 }

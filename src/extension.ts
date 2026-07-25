@@ -58,7 +58,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   await clearAllModes();
-  output.appendLine("[mode] extension activated");
+  output.appendLine(
+    `[mode] extension activated v${context.extension.packageJSON.version}` +
+      ` · profile=${cfg().activeProfile}` +
+      ` · [${cfg().profiles.map((p) => p.id).join(", ")}]`
+  );
   void maybeOfferCursorDiagnosticDefaults(context, output);
 
   context.subscriptions.push(

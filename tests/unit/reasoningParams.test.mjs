@@ -53,13 +53,13 @@ describe("reasoningParams", () => {
     assert.equal(extras.openAiBody, undefined);
   });
 
-  it("local qwen off disables thinking via chat_template_kwargs", () => {
+  it("local model id 'local' off disables thinking", () => {
     const profile = normalizeProfile({
       id: "l",
       label: "l",
       provider: "openai-compatible",
       baseUrl: "http://127.0.0.1:8080/v1",
-      model: "qwen",
+      model: "local",
       reasoningMode: "off",
     });
     const extras = buildReasoningExtras(profile);
@@ -162,10 +162,10 @@ describe("default profiles", () => {
     );
   });
 
-  it("local profile defaults to log + 1024 line tokens", () => {
+  it("local profile defaults to off + 2048 line tokens", () => {
     const local = resolveProfiles([], "groq", "", "").find((p) => p.id === "local");
-    assert.equal(local?.reasoningMode, "log");
-    assert.equal(effectiveMaxTokensLine(local), 1024);
+    assert.equal(local?.reasoningMode, "off");
+    assert.equal(effectiveMaxTokensLine(local), 2048);
   });
 
   it("legacy migration still works", () => {
@@ -177,6 +177,6 @@ describe("default profiles", () => {
     );
     assert.equal(profiles.length, 1);
     assert.equal(profiles[0].id, "default");
-    assert.equal(profiles[0].reasoningMode, "log");
+    assert.equal(profiles[0].reasoningMode, "off");
   });
 });

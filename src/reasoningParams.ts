@@ -81,11 +81,8 @@ function localOpenAiExtras(profile: LlmProfileConfig, mode: ReasoningMode): Reco
   if (profile.provider !== "openai-compatible" || !isLocalBaseUrl(profile.baseUrl ?? "")) {
     return undefined;
   }
-  const model = (profile.model ?? "").toLowerCase();
-  if (!model.includes("qwen") && !model.includes("thinking") && mode === "off") {
-    return undefined;
-  }
   if (mode === "off") {
+    // Always try to disable thinking — model id is often "local", not "qwen".
     return { chat_template_kwargs: { enable_thinking: false } };
   }
   return { chat_template_kwargs: { enable_thinking: true } };

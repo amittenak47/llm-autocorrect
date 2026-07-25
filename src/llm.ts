@@ -139,7 +139,7 @@ export class LlmClient {
     const mode = effectiveReasoningMode(profile, globalMode);
     const debug = cfg().debug;
 
-    if (parsed.reasoning && (mode === "log" || debug)) {
+    if (parsed.reasoning && mode === "log") {
       const snip =
         parsed.reasoning.length > REASONING_LOG_MAX
           ? parsed.reasoning.slice(0, REASONING_LOG_MAX) + "…"
@@ -147,7 +147,7 @@ export class LlmClient {
       this.output?.appendLine(`[llm:${profile.id}:reasoning] ${snip}`);
     }
 
-    if (!parsed.content.trim() && parsed.reasoning) {
+    if (!parsed.content.trim() && parsed.reasoning && (debug || mode === "log")) {
       this.output?.appendLine(
         `[llm:${profile.id}] empty content — reasoning consumed tokens` +
           (parsed.finishReason ? ` (finish=${parsed.finishReason})` : "") +

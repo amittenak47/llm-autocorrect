@@ -4,11 +4,14 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
-### Added
+## [0.2.1] - 2026-07-25
 
-- **Reasoning mode** — per-profile `reasoningMode` (`off` | `log`) and `reasoningEffort` for Groq, Anthropic, Gemini, and local OpenAI-compatible servers. Reasoning is logged to Output when enabled; fixes always apply from `content` only.
-- **Built-in default profiles** — when `autocorrect.profiles` is empty: `groq`, `gemini`, `anthropic`, `local` (llama-server), `ollama`.
-- **Profile token budgets** — `maxTokensLine` / `maxTokensBlock` (localhost default 1024 line / 2048 block floor).
+### Fixed
+
+- **Reasoning off** — localhost always sends `enable_thinking: false` (model id `local` no longer skipped). Legacy `default` profile no longer forces `reasoningMode: log`.
+- **Debug vs reasoning** — `autocorrect.debug` no longer dumps reasoning text unless `reasoningMode` is `log`.
+- **Local token budget** — localhost line fixes default to **2048** `max_tokens` (1024 was exhausted by thinking on some models).
+- Activation log shows extension version and resolved profile ids.
 
 ## [0.2.0] - 2026-07-25
 
