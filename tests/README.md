@@ -10,6 +10,7 @@
 | File | Purpose |
 | --- | --- |
 | `python_line_autocorrect.py` | Line autocorrect cases (typos, syntax, skips, manual command) |
+| `harness/` | LeetCode typing harness — corrupt solutions + Enter replay ([harness/README.md](harness/README.md)) |
 | `test.py` | Scratch file (optional) |
 
 ### Diagnostic gate

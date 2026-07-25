@@ -20,6 +20,7 @@ import { QueueExecutor } from "./queueExecutor";
 import { StatusBar } from "./statusBar";
 import { maybeOfferCursorDiagnosticDefaults } from "./cursorOnboard";
 import { maybeSeedDefaultProfiles } from "./profilesOnboard";
+import { pickAndRunTypingHarness } from "./typingHarness";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("LLM Autocorrect");
@@ -290,6 +291,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           : "Autocorrect: Enter fixes ON",
         4000
       );
+    }),
+
+    vscode.commands.registerCommand("autocorrect.runTypingHarness", async () => {
+      try {
+        await pickAndRunTypingHarness(output);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        output.appendLine(`[harness] ${msg}`);
+        void vscode.window.showErrorMessage(`Autocorrect harness: ${msg}`);
+      }
     })
   );
 }

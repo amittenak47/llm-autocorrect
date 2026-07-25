@@ -1,0 +1,213 @@
+{
+  "version": 1,
+  "languageId": "python",
+  "charDelayMs": 0,
+  "afterEnterMs": 4000,
+  "seed": 42,
+  "errorRate": 0.55,
+  "foreignRate": 0.08,
+  "solutions": [
+    {
+      "label": "1",
+      "stepStart": 0,
+      "stepCount": 12
+    },
+    {
+      "label": "2",
+      "stepStart": 12,
+      "stepCount": 15
+    },
+    {
+      "label": "3",
+      "stepStart": 27,
+      "stepCount": 10
+    }
+  ],
+  "steps": [
+    {
+      "insert": "# --- harness: 1 ---",
+      "enter": true,
+      "clean": "# --- harness: 1 ---"
+    },
+    {
+      "insert": "class Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    defn twoSum(self, nums, target):",
+      "enter": true,
+      "clean": "    def twoSum(self, nums, target):"
+    },
+    {
+      "insert": "        seen = {}",
+      "enter": true,
+      "clean": "        seen = {}"
+    },
+    {
+      "insert": "        for i, n in enumerate(nums):",
+      "enter": true,
+      "clean": "        for i, n in enumerate(nums):"
+    },
+    {
+      "insert": "            need = target - n",
+      "enter": true,
+      "clean": "            need = target - n"
+    },
+    {
+      "insert": "            if need in seen:",
+      "enter": true,
+      "clean": "            if need in seen:"
+    },
+    {
+      "insert": "                console.log(\"debug\");",
+      "enter": true,
+      "clean": "                return [seen[need], i]"
+    },
+    {
+      "insert": "            seen[n] = i",
+      "enter": true,
+      "clean": "            seen[n] = i"
+    },
+    {
+      "insert": "        return []",
+      "enter": true,
+      "clean": "        return []"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: 2 ---",
+      "enter": true,
+      "clean": "# --- harness: 2 ---"
+    },
+    {
+      "insert": "clas Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def isValid(self, s):",
+      "enter": true,
+      "clean": "    def isValid(self, s):"
+    },
+    {
+      "insert": "        stack = []",
+      "enter": true,
+      "clean": "        stack = []"
+    },
+    {
+      "insert": "        paris = {')': '(', ']': '[', '}': '{'}",
+      "enter": true,
+      "clean": "        pairs = {')': '(', ']': '[', '}': '{'}"
+    },
+    {
+      "insert": "        f|| ch in s:",
+      "enter": true,
+      "clean": "        for ch in s:"
+    },
+    {
+      "insert": "            if ch in paisr:",
+      "enter": true,
+      "clean": "            if ch in pairs:"
+    },
+    {
+      "insert": "                if not stack || stack[-1] != pairs[ch]:",
+      "enter": true,
+      "clean": "                if not stack or stack[-1] != pairs[ch]:"
+    },
+    {
+      "insert": "                    return Flase",
+      "enter": true,
+      "clean": "                    return False"
+    },
+    {
+      "insert": "                console.log(\"debug\");",
+      "enter": true,
+      "clean": "                stack.pop()"
+    },
+    {
+      "insert": "            else:",
+      "enter": true,
+      "clean": "            else:"
+    },
+    {
+      "insert": "                stack.append(ch)",
+      "enter": true,
+      "clean": "                stack.append(ch)"
+    },
+    {
+      "insert": "        return not stack",
+      "enter": true,
+      "clean": "        return not stack"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: 3 ---",
+      "enter": true,
+      "clean": "# --- harness: 3 ---"
+    },
+    {
+      "insert": "class Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def maxSubArray(sefl, nums):",
+      "enter": true,
+      "clean": "    def maxSubArray(self, nums):"
+    },
+    {
+      "insert": "        best = cur = nums[0]",
+      "enter": true,
+      "clean": "        best = cur = nums[0]"
+    },
+    {
+      "insert": "        for n in nusm[1:]:",
+      "enter": true,
+      "clean": "        for n in nums[1:]:"
+    },
+    {
+      "insert": "            cur = max(n, cur + n)",
+      "enter": true,
+      "clean": "            cur = max(n, cur + n)"
+    },
+    {
+      "insert": "            bets = max(best, cur)",
+      "enter": true,
+      "clean": "            best = max(best, cur)"
+    },
+    {
+      "insert": "        fmt.Println(ans)",
+      "enter": true,
+      "clean": "        return best"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    }
+  ]
+}

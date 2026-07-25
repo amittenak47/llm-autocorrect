@@ -59,6 +59,10 @@
         "title": "Autocorrect: Toggle Enter Autocorrect Off"
       },
       {
+        "command": "autocorrect.runTypingHarness",
+        "title": "Autocorrect: Run Typing Harness"
+      },
+      {
         "command": "autocorrect.correctSelection",
         "title": "Autocorrect: Correct Line Near Cursor"
       },
