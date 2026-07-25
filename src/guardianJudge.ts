@@ -1,13 +1,27 @@
 /** Granite Guardian judge helpers (pure — no vscode). */
 
+/**
+ * Strict BYOC criteria — default to rejecting anything that is not a clear,
+ * minimal typo/syntax fix. Style-only edits and invented names must score 'no'.
+ */
 export const AUTOCORRECT_BYOC_CRITERIA =
-  "The assistant reply is a minimal code correction of the TARGET/SOURCE only. " +
-  "It preserves string literals from the original, does not invent unrelated functions " +
-  "or identifiers, does not paste surrounding file context, and contains no prose or markdown fences.";
+  "Score 'yes' ONLY if EVERY condition holds; otherwise score 'no'. When unsure, score 'no'. " +
+  "(1) ASSISTANT_REPLY is a minimal typo/syntax fix of ORIGINAL (TARGET/SOURCE) — not a rewrite, " +
+  "refactor, rename, or style pass. " +
+  "(2) String/char literal contents are preserved exactly (do not change messages, paths, or quotes " +
+  "inside literals). " +
+  "(3) Do not invent functions, variables, or identifiers that are not implied by fixing an " +
+  "obvious misspelling of a keyword/builtin or of a name already present in ORIGINAL. " +
+  "(4) Custom/domain names that are intentional must stay; only clear keyboard typos may change. " +
+  "(5) Reject style-only diffs: removing/adding semicolons, changing quote style, reformatting, " +
+  "or 'cleanup' when ORIGINAL had no real error. " +
+  "(6) No surrounding file context, no prose, no markdown fences — code only. " +
+  "(7) The edit must be the smallest change that repairs the mistake.";
 
 const GUARDIAN_NOTHINK =
   "<no-think>As a judge agent, assess whether the provided text meets the given " +
-  "judging criteria using all available information. Provide your score immediately " +
+  "judging criteria using all available information. Be strict: prefer 'no' over 'yes' " +
+  "if any criterion fails or is ambiguous. Provide your score immediately " +
   "without explanation. Output empty <think>\n</think> tags followed by your score " +
   "in <score></score> tags.";
 
@@ -21,7 +35,8 @@ export function buildGuardianJudgeUserMessage(opts: {
   const guardianBlock =
     `<guardian>${GUARDIAN_NOTHINK}\n\n` +
     `### Criteria: ${criteria}\n\n` +
-    `### Scoring Schema: If the last assistant's text meets the criteria, return 'yes'; otherwise, return 'no'.`;
+    `### Scoring Schema: Return 'yes' only if ASSISTANT_REPLY fully meets the criteria. ` +
+    `Otherwise return 'no'. If uncertain, return 'no'.`;
 
   return (
     `ORIGINAL:\n${opts.original}\n\n` +

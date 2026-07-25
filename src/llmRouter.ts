@@ -129,7 +129,8 @@ export class LlmRouter {
       const raw = await this.concurrency.run(gProfile.id, () =>
         this.client.completeForProfile(gProfile, {
           system:
-            "You are Granite Guardian. Judge the ASSISTANT_REPLY against the criteria. Output only the score format requested.",
+            "You are Granite Guardian. Judge ASSISTANT_REPLY against the criteria strictly. " +
+            "Prefer 'no' when unsure. Output only the requested score format.",
           user,
           maxTokens: 128,
           signal: gSignal,

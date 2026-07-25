@@ -16,6 +16,9 @@ describe("guardianJudge", () => {
     assert.match(msg, /<guardian>/);
     assert.match(msg, /<no-think>/);
     assert.match(msg, /### Criteria:/);
+    assert.match(msg, /When unsure, score 'no'/);
+    assert.match(msg, /Reject style-only/);
+    assert.match(msg, /If uncertain, return 'no'/);
   });
 
   it("parses <score> tags", () => {
