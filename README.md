@@ -21,19 +21,20 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-## Features (v0.2.3)
+## Features (v0.2.7)
 
 | Feature | Summary |
 | --- | --- |
 | **Line autocorrect** | On **Enter**, the line you left may be fixed (typos, syntax, wrong-language idioms). Cascade errors (e.g. `return` under broken `def`) redirect to the upstream line. Brief highlight on change. |
+| **Granite Guardian judge** | Optional second profile scores fix/paste replies (BYOC yes/no). On `no`, regenerate once; default **`softApply`** still writes the candidate (revert via Remove/Revert at Cursor). Staged **context notes** skip the judge (instruction edits). |
 | **Modal menu** | Double-tap **`Ctrl`** — hotkey-driven workflow without leaving the editor. |
 | **Immediate fix** | **A** (block) or **C** (line) — send to LLM immediately, no staging. |
 | **Stage Workflow** | **Shift+A** (block) or **Shift+C** (line) → green highlight → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Window** | **S** → W/S (up/down) A/D (start/end) controls to select a block → **E** closes selection window and enters staged mode → set modifiers → **E** send now or **Shift+E** enqueue. |
-| **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
+| **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt (instruction) · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
 | **Stage Context** | **1** nearby lines (default **indent-scoped**; optional flat `window`) · **2** enclosing signature **chain** (e.g. `class` + `def`, on by default for fix/docs) · **3** recent edit hunks · **4** open-tab signatures · **5** last large **selection** snippet. Tiers **3**–**5** require `context.ringEnabled`. Caveman staging defaults to nearby only. |
-| **Multi-profile LLM** | Named profiles for Groq, Gemini, Anthropic, local llama-server, and Ollama. Empty `profiles` uses built-in defaults. Choose with **M** / **Shift+M** before **E** / **Shift+E**. |
-| **Reasoning mode** | Per-profile `reasoningMode`: `off` (default) or `log` (Output only — never applied). Localhost disables thinking tokens when off; line fixes use a higher output budget by default. |
+| **Multi-profile LLM** | Named profiles for Groq, Gemini, Anthropic, local Granite (`local`), Guardian (`guardian`), and Ollama. Empty `profiles` uses built-in defaults. Choose with **M** / **Shift+M** before **E** / **Shift+E**. |
+| **Reasoning mode** | Per-profile `reasoningMode` only: `off` (default) or `log` (Output only — never applied). No global `llm.reasoningMode`. |
 | **Queue mode** (`queue.mode`) | **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). Checked items apply; **unchecked stay queued**. **Deferred batch** (`deferExecution`, advanced): enqueue stores **tasks** only (blue dotted); **Q** runs selected tasks — LLM + apply. |
 | **Per-profile concurrency** | Each LLM profile has its own async request pool (`maxConcurrent`: default **1** localhost, **2** cloud). Deferred batch and all LLM calls share the limit — not OS threads, but independent in-flight caps per endpoint. |
 | **Region lock** | Overlapping enqueue prompts first (**Replace** / **Expand & merge** / **Revert & continue** / **Cancel**). Queue border color = LLM profile. Applied fixes live in a **revert ledger** until reverted. |
@@ -41,10 +42,10 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Review before apply (Enter)** | `queue.enabled` — Enter still autocorrects; uses the active `queue.mode` (review changes vs defer task). |
 | **Manual-only Enter** | `disableAutocorrect` — no automatic Enter fixes; call the LLM only when you use menu/staged keys. |
 | **LSP or deliberate** | **Automatic:** Enter can require an LSP squiggle first (`line.requireDiagnostic`). **Deliberate:** menu/staged sends on demand (`fix.requireDiagnostic` optional). **Off:** `disableAutocorrect` stops Enter autocorrect entirely. |
-| **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). |
+| **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). Faithfulness check rejects invented programs. |
 | **Local inference** | `openai-compatible` + localhost → **60s** default timeout; **2048** default line `max_tokens`. |
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (v0.2.0–v0.2.3).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (through **v0.2.7**).
 
 You bring your own API key. Keys live in the editor's secret storage, not in settings files.
 
@@ -359,36 +360,84 @@ llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080
 
 Use an **instruct/chat** model via `/v1/chat/completions`. Timeout defaults to **60s** on localhost when `timeoutMs` is `0`. Line fixes default to **2048** `max_tokens` on localhost (override with `maxTokensLine`).
 
-#### Granite 4.1 + Guardian (llama-cli download)
+#### Recommended local setup (Granite 4.1 + Guardian LoRA)
 
-From a shell where `llama-cli` / `llama-server` are on your PATH (e.g. `C:\Users\Amit\llama.cpp`):
+**Recommended (VRAM-efficient):** run **Granite 4.1 8B** as the fixer, and score corrections with **Granite Guardian as a LoRA** on the same base weights — not a second full 8B GGUF. One base + a small adapter uses far less VRAM than two full models, and keeps the judge aligned with the fixer family.
+
+| Role | What to run | Port / profile |
+| --- | --- | --- |
+| **Fixer** | `granite-4.1-8b` GGUF (**Q4_K_M** daily / **Q8_0** quality) | `:8080` → profile `local` |
+| **Judge (preferred)** | Same base GGUF + **Guardian LoRA** (GGUF adapter via `--lora`) | `:8081` → profile `guardian` |
+| **Judge (fallback)** | Full `granite-guardian-4.1-8b` GGUF Q4_K_M | `:8081` → profile `guardian` |
+
+**Why LoRA:** Guardian is a specialized judge fine-tuned from Granite. Loading it as a LoRA on the fixer base avoids paying ~5GB for a second full model, leaves headroom for longer `-c` context on a 24GB GPU, and matches IBM’s Guardian-as-adapter packaging ([granitelib-guardian](https://huggingface.co/ibm-granite/granitelib-guardian-r1.0)).
+
+**Serve shape the extension expects** (two OpenAI-compatible endpoints):
+
+```text
+Fixer   http://127.0.0.1:8080/v1   →  autocorrect.activeProfile = "local"
+Judge   http://127.0.0.1:8081/v1   →  autocorrect.guardian.profileId = "guardian"
+```
+
+##### 1) Download base GGUFs
+
+If your `llama-cli` was built **without HTTPS/OpenSSL**, use Python instead of `-hf`:
 
 ```bat
-REM Download (caches GGUF; short ping run)
-llama-cli -hf ibm-granite/granite-4.1-8b-GGUF:Q8_0 -p "ping" -n 8
+cd C:\Users\Amit\llama.cpp\models
+
+python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-4.1-8b-GGUF','granite-4.1-8b-Q4_K_M.gguf', local_dir='.'))"
+python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-4.1-8b-GGUF','granite-4.1-8b-Q8_0.gguf', local_dir='.'))"
+```
+
+Or, with an SSL-enabled `llama-cli`:
+
+```bat
 llama-cli -hf ibm-granite/granite-4.1-8b-GGUF:Q4_K_M -p "ping" -n 8
-llama-cli -hf ibm-granite/granite-guardian-4.1-8b-GGUF:Q4_K_M -p "ping" -n 8
+llama-cli -hf ibm-granite/granite-4.1-8b-GGUF:Q8_0 -p "ping" -n 8
 ```
 
-Serve fixer on **8080** and Guardian on **8081** (two terminals):
+##### 2) Guardian LoRA (recommended judge)
+
+1. Download the PEFT LoRA for your Granite 4.1 size from [ibm-granite/granitelib-guardian-r1.0](https://huggingface.co/ibm-granite/granitelib-guardian-r1.0) (path under `guardian-core/…/lora`).
+2. Convert with llama.cpp (`convert_lora_to_gguf.py`), passing `--base` to the matching HF base so module names resolve.
+3. Serve the **same** base GGUF as the fixer family, with the adapter attached:
 
 ```bat
-REM Q8 fixer (~9GB) — or swap :Q8_0 for :Q4_K_M
-llama-server -hf ibm-granite/granite-4.1-8b-GGUF:Q8_0 --host 127.0.0.1 --port 8080 -c 16384
+cd C:\Users\Amit\llama.cpp\build_ninja\bin
 
-llama-server -hf ibm-granite/granite-guardian-4.1-8b-GGUF:Q4_K_M --host 127.0.0.1 --port 8081 -c 8192
+REM Fixer (no LoRA)
+llama-server.exe -m C:\Users\Amit\llama.cpp\models\granite-4.1-8b-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 32768
+
+REM Judge = same base + Guardian LoRA (preferred)
+llama-server.exe -m C:\Users\Amit\llama.cpp\models\granite-4.1-8b-Q4_K_M.gguf --lora C:\Users\Amit\llama.cpp\models\guardian-core.gguf --host 127.0.0.1 --port 8081 -c 8192
 ```
 
-In settings: set `autocorrect.activeProfile` to `"local"`, then enable the judge:
+Use **Q8_0** on `:8080` if you want a higher-quality fixer; keep the judge on **Q4 + LoRA** to save VRAM.
+
+##### 3) Fallback: full Guardian GGUF (no LoRA yet)
+
+If you have not converted a LoRA yet, a second full Guardian GGUF still works with the built-in `guardian` profile:
+
+```bat
+python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-guardian-4.1-8b-GGUF','granite-guardian-4.1-8b-Q4_K_M.gguf', local_dir=r'C:\Users\Amit\llama.cpp\models'))"
+
+llama-server.exe -m C:\Users\Amit\llama.cpp\models\granite-guardian-4.1-8b-Q4_K_M.gguf --host 127.0.0.1 --port 8081 -c 8192
+```
+
+##### 4) Extension settings
 
 ```json
+"autocorrect.activeProfile": "local",
 "autocorrect.guardian.enabled": true,
 "autocorrect.guardian.profileId": "guardian",
 "autocorrect.guardian.maxRetries": 1,
 "autocorrect.apply.onReject": "softApply"
 ```
 
-`onReject: "softApply"` (default) applies a rejected fix with a soft label so you can revert. `skip` only logs. Judge failures fail-open (accept the candidate).
+`softApply` (default) still writes a rejected candidate so you can revert; `skip` only logs. Staged **X** context notes are treated as **instructions** (e.g. add typing) and skip Guardian. Leave `guardian.enabled` false until both servers are up.
+
+**Suggested trials on RTX 4090 24GB:** Q4 fixer only → Q4 fixer + Guardian LoRA → Q8 fixer + Guardian LoRA (or Q4 full Guardian fallback).
 
 ---
 
