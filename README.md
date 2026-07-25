@@ -21,18 +21,19 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-## Features (v0.2.0)
+## Features (v0.2.3)
 
 | Feature | Summary |
 | --- | --- |
-| **Line autocorrect** | On **Enter**, the line you left may be fixed (typos, syntax). Brief highlight on change. |
+| **Line autocorrect** | On **Enter**, the line you left may be fixed (typos, syntax, wrong-language idioms). Cascade errors (e.g. `return` under broken `def`) redirect to the upstream line. Brief highlight on change. |
 | **Modal menu** | Double-tap **`Ctrl`** — hotkey-driven workflow without leaving the editor. |
 | **Immediate fix** | **A** (block) or **C** (line) — send to LLM immediately, no staging. |
 | **Stage Workflow** | **Shift+A** (block) or **Shift+C** (line) → green highlight → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Window** | **S** → W/S (up/down) A/D (start/end) controls to select a block → **E** closes selection window and enters staged mode → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
 | **Stage Context** | **1** nearby lines (default **indent-scoped**; optional flat `window`) · **2** enclosing signature **chain** (e.g. `class` + `def`, on by default for fix/docs) · **3** recent edit hunks · **4** open-tab signatures · **5** last large **selection** snippet. Tiers **3**–**5** require `context.ringEnabled`. Caveman staging defaults to nearby only. |
-| **Multi-profile LLM** | Groq, Gemini, Anthropic, local llama-server side by side. Choose profile with **M** / **Shift+M** during the modifier step (before **E** / **Shift+E**); that profile owns the request and its queue slot. |
+| **Multi-profile LLM** | Named profiles for Groq, Gemini, Anthropic, local llama-server, and Ollama. Empty `profiles` uses built-in defaults. Choose with **M** / **Shift+M** before **E** / **Shift+E**. |
+| **Reasoning mode** | Per-profile `reasoningMode`: `off` (default) or `log` (Output only — never applied). Localhost disables thinking tokens when off; line fixes use a higher output budget by default. |
 | **Queue mode** (`queue.mode`) | **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). Checked items apply; **unchecked stay queued**. **Deferred batch** (`deferExecution`, advanced): enqueue stores **tasks** only (blue dotted); **Q** runs selected tasks — LLM + apply. |
 | **Per-profile concurrency** | Each LLM profile has its own async request pool (`maxConcurrent`: default **1** localhost, **2** cloud). Deferred batch and all LLM calls share the limit — not OS threads, but independent in-flight caps per endpoint. |
 | **Region lock** | Overlapping enqueue prompts first (**Replace** / **Expand & merge** / **Revert & continue** / **Cancel**). Queue border color = LLM profile. Applied fixes live in a **revert ledger** until reverted. |
@@ -41,9 +42,9 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **Manual-only Enter** | `disableAutocorrect` — no automatic Enter fixes; call the LLM only when you use menu/staged keys. |
 | **LSP or deliberate** | **Automatic:** Enter can require an LSP squiggle first (`line.requireDiagnostic`). **Deliberate:** menu/staged sends on demand (`fix.requireDiagnostic` optional). **Off:** `disableAutocorrect` stops Enter autocorrect entirely. |
 | **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). |
-| **Local inference** | `openai-compatible` + localhost → **60s** default timeout. |
+| **Local inference** | `openai-compatible` + localhost → **60s** default timeout; **2048** default line `max_tokens`. |
 
-See [CHANGELOG.md](CHANGELOG.md) for the full v0.2.0 release notes.
+See [CHANGELOG.md](CHANGELOG.md) for release notes (v0.2.0–v0.2.3).
 
 You bring your own API key. Keys live in the editor's secret storage, not in settings files.
 
@@ -300,22 +301,26 @@ Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extend
 
 ### 11. Multi-profile LLM (modifiers **M**, **Shift+M**)
 
-**When:** Different models for different jobs — e.g. Groq for quick fixes, local llama-server for large context.
+**When:** Different models for different jobs — e.g. Groq for quick fixes, local llama-server for large context or reasoning models.
 
 **When to pick a profile:** During staged mode, **before** **E** or **Shift+E** (tutorials 12–13). **M** cycles; **Shift+M** opens QuickPick. The profile you pick is used for that send and recorded on queued items. Use **Shift+Q** (tutorial 14) to review if you enqueued to multiple profiles.
 
-**Setup**
+**Setup** — use `autocorrect.profiles` only (do not set legacy `provider` / `model` / `baseUrl` alongside it):
 
 ```json
 {
+  "autocorrect.activeProfile": "local",
+  "autocorrect.llm.reasoningMode": "off",
   "autocorrect.profiles": [
     {
       "id": "groq",
       "label": "Groq free",
       "provider": "groq",
+      "model": "llama-3.1-8b-instant",
       "contextPolicy": "minimal",
       "timeoutMs": 5000,
-      "maxConcurrent": 3
+      "maxConcurrent": 3,
+      "reasoningMode": "off"
     },
     {
       "id": "local",
@@ -325,14 +330,19 @@ Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extend
       "model": "local",
       "contextPolicy": "extended",
       "timeoutMs": 60000,
-      "maxConcurrent": 1
+      "maxConcurrent": 1,
+      "reasoningMode": "off",
+      "maxTokensLine": 2048
     }
-  ],
-  "autocorrect.activeProfile": "groq"
+  ]
 }
 ```
 
-Set API key per profile: **Autocorrect: Set API Key**.
+If `profiles` is unset, the package default is: `groq`, `gemini`, `anthropic`, `local`, `ollama`. On first activation the extension also **writes those into User settings** so they appear in Settings JSON (not Workspace — API endpoints are personal).
+
+Set API key per cloud profile: **Autocorrect: Set API Key**. Localhost needs no key.
+
+**Reasoning** — `reasoningMode: "off"` minimizes thinking tokens (recommended for Enter fixes). `"log"` writes reasoning to **Output → LLM Autocorrect** but never applies it. Profile setting overrides `autocorrect.llm.reasoningMode`.
 
 **Usage**
 
@@ -340,17 +350,15 @@ Set API key per profile: **Autocorrect: Set API Key**.
 2. **M** cycles profiles (updates global `activeProfile`) or **Shift+M** picks from list.
 3. **E** (tutorial 12) / **Shift+E** (tutorial 13) sends via that profile.
 
-Legacy `autocorrect.provider` / `model` / `baseUrl` still work when `profiles` is empty (single `"default"` profile).
-
 **Concurrency:** Each profile caps simultaneous LLM requests (`maxConcurrent`). Defaults: **1** for localhost, **2** for cloud. Deferred batch **Q** runs tasks in parallel across profiles and up to each profile's limit — not OS threads, but separate async pools per endpoint.
 
-**Local llama-server**
+**Local llama-server** (start the server yourself; the extension does not launch it):
 
 ```bash
 llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080
 ```
 
-Use an **instruct/chat** model via `/v1/chat/completions`. Timeout defaults to **60s** on localhost when `timeoutMs` is `0`.
+Use an **instruct/chat** model via `/v1/chat/completions`. Timeout defaults to **60s** on localhost when `timeoutMs` is `0`. Line fixes default to **2048** `max_tokens` on localhost (override with `maxTokensLine`).
 
 ---
 
@@ -371,7 +379,7 @@ Default modifier is **best-guess fix**. Status bar shows active modifiers and to
 
 | Setting value | Name | **Shift+E** does | **Q** / **Shift+Q** does |
 | --- | --- | --- | --- |
-| **`reviewChanges`** | **Checkpoint review** (default) | Calls LLM **now**; stores proposed edit (amber) | Review **edits** — apply checked, discard unchecked |
+| **`reviewChanges`** | **Checkpoint review** (default) | Calls LLM **now**; stores proposed edit (amber) | Review **edits** — apply checked; unchecked **stay queued** |
 | **`deferExecution`** | **Deferred batch** | Stores **task** only — no LLM yet (blue dotted) | Run checked tasks — LLM + apply immediately (parallel per profile) |
 
 1. Stage and set modifiers (tutorials **4**–**11**).
@@ -503,11 +511,12 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | --- | --- | --- |
 | `autocorrect.enabled` | `true` | Master switch |
 | `autocorrect.disableAutocorrect` | `false` | Stop automatic Enter line fixes; fix on demand only (tutorial 16) |
-| `autocorrect.provider` | `groq` | Legacy provider (used if `profiles` empty) |
-| `autocorrect.model` | `""` | Model ID (empty = provider default) |
-| `autocorrect.baseUrl` | `""` | Legacy openai-compatible URL |
-| `autocorrect.profiles` | `[]` | Named LLM endpoints (see tutorial 11) |
-| `autocorrect.activeProfile` | `default` | Default profile id |
+| `autocorrect.profiles` | package default (5 profiles) | Named LLM endpoints in **User** settings (tutorial 11). First install seeds User settings when unset. Avoid Workspace unless the project needs different endpoints. |
+| `autocorrect.activeProfile` | `groq` | Active profile id |
+| `autocorrect.llm.reasoningMode` | `off` | Global fallback when a profile omits `reasoningMode` (`off` \| `log`) |
+| `autocorrect.provider` | `groq` | **Legacy** — only if `profiles` is empty |
+| `autocorrect.model` | `""` | **Legacy** model id |
+| `autocorrect.baseUrl` | `""` | **Legacy** openai-compatible URL |
 | `autocorrect.languages` | `["python"]` | Active language IDs |
 | `autocorrect.prompt.prefix` | `""` | Global context on every request (tutorial 17) |
 | `autocorrect.line.enabled` | `true` | Enter-triggered line fixes |
@@ -525,7 +534,9 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | `autocorrect.line.debounceMs` | `800` | Delay after Enter before check |
 | `autocorrect.queue.mode` | `reviewChanges` | Checkpoint review (default) vs deferred batch (advanced). Unchecked stay queued. |
 | `autocorrect.queue.enabled` | `false` | Enter queues instead of applying; uses `queue.mode` (tutorial 15) |
-| `autocorrect.debug` | `false` | Verbose output channel logs |
+| `autocorrect.debug` | `false` | Verbose scheduling / skip logs (does not dump reasoning unless `reasoningMode` is `log`) |
+
+**Profile object fields** (inside `autocorrect.profiles`): `id`, `label`, `provider`, `model`, `baseUrl`, `contextPolicy`, `timeoutMs`, `maxConcurrent`, `reasoningMode`, `reasoningEffort`, `maxTokensLine`, `maxTokensBlock`, `color`.
 
 ### Supported languages
 
@@ -583,9 +594,11 @@ Add language ID to `autocorrect.languages` and install the language server (rust
 
 ## How it behaves
 
-**Line mode** — Enter only; skips blank/comment lines; may add lines for syntax fixes (e.g. missing `)` on next line).
+**Line mode** — Enter only; skips blank/comment lines; may add lines for syntax fixes (e.g. missing `)` on next line). When diagnostics on the left line are only cascade fallout (unexpected indent, “return outside function”), the fix targets the upstream syntax error instead.
 
 **Block mode** — Full block replace; line count may grow or shrink.
+
+**Context** — Nearby context is **indent-scoped** by default (same/outer indent + enclosing header). The prompt sends raw buffer text and the file language; the model infers typos and wrong-language idioms. Prefer paste-translate for large foreign-language pastes.
 
 **Privacy** — Code sent to your chosen provider when a correction runs; keys in secret storage.
 
@@ -605,6 +618,9 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | **Log says `no LSP squiggle` / status bar skip** | With default `line.requireDiagnostic: true`, Enter only calls the LLM when the language server reports an error/warning on that line. Fix LSP setup (**View → Problems**), or set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor, accept the first-run prompt or see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
 | **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
 | **`already correct` / no edit** | Model returned the same line or `UNCHANGED`. Normal — no apply, but you may still have paid for the prompt. |
+| **`whitespace-only diff` / indent no-op** | Model echoed the target without indent. v0.2.3 reattaches buffer indent and retries the previous line when cascade/root diagnostics point upstream. |
+| **`empty content — reasoning consumed tokens`** | Reasoning model burned the output budget. Set profile `reasoningMode: "off"`, raise `maxTokensLine` (localhost default 2048), and confirm Output shows `v0.2.1+`. |
+| **Wrong profile / `default` in logs** | Remove legacy `autocorrect.provider` / `baseUrl` / `model` when using `profiles`. Activation should list your profile ids. |
 | **Range locked on enqueue** | Overlapping enqueue shows a modal: **Replace**, **Expand & merge** (same profile), **Revert & continue** (if an applied fix overlaps), or **Cancel**. |
 | **Remove / revert at cursor** | Command Palette → **Remove or Revert Queued Change at Cursor** — drops a queued item, or reverts a ledger entry if the buffer still matches. |
 | **Enter does nothing at all (no log)** | Likely `disableAutocorrect: true` or `line.enabled: false`. Status bar shows `(manual)` when Enter autocorrect is off. |

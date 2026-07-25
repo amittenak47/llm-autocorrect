@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.2.1",
+  "version": "0.2.5",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -512,8 +512,77 @@
         },
         "autocorrect.profiles": {
           "type": "array",
-          "default": [],
-          "description": "Named LLM profiles. When empty, uses built-in defaults (groq, gemini, anthropic, local llama-server, ollama) unless legacy provider/model/baseUrl are set.",
+          "default": [
+            {
+              "id": "groq",
+              "label": "Groq",
+              "provider": "groq",
+              "model": "llama-3.1-8b-instant",
+              "contextPolicy": "minimal",
+              "timeoutMs": 5000,
+              "maxConcurrent": 2,
+              "reasoningMode": "off",
+              "reasoningEffort": "none",
+              "maxTokensLine": 300,
+              "color": "#4a9eff"
+            },
+            {
+              "id": "gemini",
+              "label": "Gemini",
+              "provider": "gemini",
+              "model": "gemini-2.5-flash-lite",
+              "contextPolicy": "minimal",
+              "timeoutMs": 5000,
+              "maxConcurrent": 2,
+              "reasoningMode": "off",
+              "reasoningEffort": "none",
+              "maxTokensLine": 300,
+              "color": "#2dd4bf"
+            },
+            {
+              "id": "anthropic",
+              "label": "Anthropic",
+              "provider": "anthropic",
+              "model": "claude-haiku-4-5-20251001",
+              "contextPolicy": "minimal",
+              "timeoutMs": 5000,
+              "maxConcurrent": 2,
+              "reasoningMode": "off",
+              "reasoningEffort": "none",
+              "maxTokensLine": 300,
+              "color": "#a78bfa"
+            },
+            {
+              "id": "local",
+              "label": "llama-server",
+              "provider": "openai-compatible",
+              "baseUrl": "http://127.0.0.1:8080/v1",
+              "model": "local",
+              "contextPolicy": "extended",
+              "timeoutMs": 60000,
+              "maxConcurrent": 1,
+              "reasoningMode": "off",
+              "reasoningEffort": "default",
+              "maxTokensLine": 2048,
+              "maxTokensBlock": 2048,
+              "color": "#fb923c"
+            },
+            {
+              "id": "ollama",
+              "label": "Ollama",
+              "provider": "openai-compatible",
+              "baseUrl": "http://127.0.0.1:11434/v1",
+              "model": "llama3.2",
+              "contextPolicy": "extended",
+              "timeoutMs": 60000,
+              "maxConcurrent": 1,
+              "reasoningMode": "off",
+              "reasoningEffort": "none",
+              "maxTokensLine": 512,
+              "color": "#f472b6"
+            }
+          ],
+          "description": "Named LLM profiles. Prefer User settings (not Workspace). Package default is groq/gemini/anthropic/local/ollama; first activation seeds User settings when profiles are unset.",
           "items": {
             "type": "object",
             "properties": {

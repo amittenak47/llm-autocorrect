@@ -2,12 +2,18 @@ import * as vscode from "vscode";
 import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
 import { effectiveMaxTokensLine } from "./profiles";
 import { ContextAssemblerService } from "./contextAssembler";
-import { shouldFixLine } from "./diagnosticGate";
+import { shouldFixLine, resolveLineFixTarget, previousNonBlankLine } from "./diagnosticGate";
 import { PROFILES, isCommentOrBlank, LanguageProfile } from "./languages";
 import { FixQueue, QueuedFix } from "./fixQueue";
 import { LlmRouter } from "./llmRouter";
 import { lineFixUserMessage } from "./promptContext";
-import { fixForSingleLineTarget, isUnchanged, modelLines, normalizeModelText } from "./responseIngress";
+import {
+  fixForSingleLineTarget,
+  isUnchanged,
+  modelLines,
+  normalizeModelText,
+  preserveLeadingIndent,
+} from "./responseIngress";
 import { StatusBar } from "./statusBar";
 
 interface Pending {
@@ -239,12 +245,20 @@ export class LineCorrector implements vscode.Disposable {
     profile: LanguageProfile,
     force: boolean,
     queue = false,
-    profileIdOverride?: string
+    profileIdOverride?: string,
+    retriedUpstream = false
   ): Promise<void> {
     const doc = this.docFor(uri);
     if (!doc || doc.isClosed || line >= doc.lineCount) {
       this.log(`skip line ${line + 1}: document closed or line missing`);
       return;
+    }
+    const fixLine = resolveLineFixTarget(doc.uri, doc, line);
+    if (fixLine !== line) {
+      this.output.appendLine(
+        `[line] redirecting fix from line ${line + 1} to line ${fixLine + 1} (upstream syntax error)`
+      );
+      line = fixLine;
     }
     const original = doc.lineAt(line).text;
     if (isCommentOrBlank(original, profile)) {
@@ -337,17 +351,20 @@ export class LineCorrector implements vscode.Disposable {
     const raw = normalizeModelText(response);
     if (isUnchanged(raw)) {
       this.log(`line ${line + 1}: model returned UNCHANGED`);
+      await this.maybeRetryUpstream(uri, line, profile, force, queue, profileIdOverride, retriedUpstream);
       return;
     }
-    const corrected = fixForSingleLineTarget(modelLines(response));
-    if (!corrected || corrected === original) {
+    const parsed = fixForSingleLineTarget(modelLines(response));
+    if (!parsed) {
       this.log(`line ${line + 1}: no meaningful change`);
+      await this.maybeRetryUpstream(uri, line, profile, force, queue, profileIdOverride, retriedUpstream);
       return;
     }
-    // Whitespace-only diffs on the first line are more likely model noise than a fix.
-    const firstLine = corrected.split("\n")[0];
-    if (firstLine.trim() === original.trim() && !corrected.includes("\n")) {
-      this.log(`line ${line + 1}: whitespace-only diff`);
+    // Keep the buffer's Enter auto-indent; models often strip leading whitespace.
+    const corrected = preserveLeadingIndent(original, parsed);
+    if (corrected === original) {
+      this.log(`line ${line + 1}: no meaningful change (indent preserved)`);
+      await this.maybeRetryUpstream(uri, line, profile, force, queue, profileIdOverride, retriedUpstream);
       return;
     }
 
@@ -380,6 +397,39 @@ export class LineCorrector implements vscode.Disposable {
       );
       this.flash(doc, line, extra);
     }
+  }
+
+  /** After a no-op on the target, try the upstream syntax-error line once. */
+  private async maybeRetryUpstream(
+    uri: vscode.Uri,
+    line: number,
+    profile: LanguageProfile,
+    force: boolean,
+    queue: boolean,
+    profileIdOverride: string | undefined,
+    retriedUpstream: boolean
+  ): Promise<void> {
+    if (retriedUpstream) {
+      return;
+    }
+    const doc = this.docFor(uri);
+    if (!doc) {
+      return;
+    }
+    let upstream = resolveLineFixTarget(doc.uri, doc, line);
+    if (upstream === line) {
+      const prev = previousNonBlankLine(doc, line);
+      if (prev !== undefined && prev !== line) {
+        upstream = prev;
+      }
+    }
+    if (upstream === line) {
+      return;
+    }
+    this.output.appendLine(
+      `[line] retrying upstream line ${upstream + 1} after no-op on line ${line + 1}`
+    );
+    await this.check(uri, upstream, profile, force, queue, profileIdOverride, true);
   }
 
   /** Subtle 2-second highlight so the user notices the change happened. */

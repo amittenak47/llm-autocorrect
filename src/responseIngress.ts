@@ -36,6 +36,20 @@ export function fixForSingleLineTarget(lines: string[]): string | undefined {
 }
 
 /**
+ * Reattach the buffer's leading whitespace on the first line. Models often
+ * strip Enter auto-indent; the IDE indent is authoritative for typo fixes.
+ */
+export function preserveLeadingIndent(original: string, corrected: string): string {
+  const lead = original.match(/^[ \t]*/)?.[0] ?? "";
+  const lines = corrected.split("\n");
+  if (lines.length === 0) {
+    return corrected;
+  }
+  lines[0] = lead + lines[0].replace(/^[ \t]*/, "");
+  return lines.join("\n");
+}
+
+/**
  * Line-aligned apply text for a block of `lineCount` lines. Pads with blank
  * lines or truncates so the result always has exactly `lineCount` lines when
  * `preserveLineCount` is true (caveman). Otherwise returns full model text.

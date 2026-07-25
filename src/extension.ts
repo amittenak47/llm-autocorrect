@@ -19,6 +19,7 @@ import { StagedExecutor } from "./stagedExecutor";
 import { QueueExecutor } from "./queueExecutor";
 import { StatusBar } from "./statusBar";
 import { maybeOfferCursorDiagnosticDefaults } from "./cursorOnboard";
+import { maybeSeedDefaultProfiles } from "./profilesOnboard";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("LLM Autocorrect");
@@ -63,6 +64,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ` · profile=${cfg().activeProfile}` +
       ` · [${cfg().profiles.map((p) => p.id).join(", ")}]`
   );
+  void maybeSeedDefaultProfiles(context, output);
   void maybeOfferCursorDiagnosticDefaults(context, output);
 
   context.subscriptions.push(

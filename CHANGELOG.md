@@ -4,14 +4,51 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-07-25
+## [0.2.5] - 2026-07-25
 
 ### Fixed
 
-- **Reasoning off** — localhost always sends `enable_thinking: false` (model id `local` no longer skipped). Legacy `default` profile no longer forces `reasoningMode: log`.
-- **Debug vs reasoning** — `autocorrect.debug` no longer dumps reasoning text unless `reasoningMode` is `log`.
-- **Local token budget** — localhost line fixes default to **2048** `max_tokens` (1024 was exhausted by thinking on some models).
-- Activation log shows extension version and resolved profile ids.
+- **Duplicate Cancel** on modal dialogs (VS Code already adds Cancel when `modal: true`).
+- **Revert ledger apply** — only drop a ledger entry after a successful revert; keep it if the buffer no longer matches.
+- Clearer Output reasons when apply is cancelled, revert fails, or baseline is stale.
+- **Large block expansion** — confirm before applying a fix that more than doubles the staged line count (guards against models pasting context into the block).
+
+### Added
+
+- **Default profiles in settings** — package default for `autocorrect.profiles` is the full set (groq, gemini, anthropic, local, ollama). First activation seeds **User** settings when profiles are unset (not Workspace).
+
+## [0.2.3] - 2026-07-25
+
+### Fixed
+
+- **Cascade redirect** — root diagnostics that *start* on the previous line but span into the Enter line (common for `defn` / `Expected expression`) now redirect upstream before calling the LLM.
+- **Enter auto-indent** — model replies that strip leading whitespace reattach the buffer’s indent instead of aborting as `whitespace-only diff`; if the line is still unchanged, retry the previous non-blank line.
+
+
+### Fixed
+
+- **Upstream line redirect** — when Enter would fix a line that only has cascade diagnostics (for example `return` under a broken `defn`), the extension redirects to the previous line that holds the root syntax error.
+- After a whitespace-only model reply (echoed target with different indent), the extension retries that upstream line when applicable.
+
+## [0.2.1] - 2026-07-25
+
+### Added
+
+- **Reasoning controls** — per-profile `reasoningMode` (`off` | `log`) and optional `reasoningEffort`. Fixes always apply from model `content` only; when `log`, reasoning traces go to the Output channel and are never applied.
+- **Global fallback** — `autocorrect.llm.reasoningMode` when a profile omits `reasoningMode`.
+- **Built-in profiles** — if `autocorrect.profiles` is empty and legacy `provider` / `model` / `baseUrl` are unset, the extension uses: `groq`, `gemini`, `anthropic`, `local` (llama-server), `ollama`.
+- **Profile token budgets** — `maxTokensLine` / `maxTokensBlock`. Localhost line fixes default to **2048** output tokens.
+
+### Changed
+
+- Prefer **named profiles** over legacy single-provider settings. Remove `autocorrect.provider` / `baseUrl` / `model` once `profiles` is configured.
+- Local OpenAI-compatible requests send `enable_thinking: false` when `reasoningMode` is `off` (including when the model id is `local`).
+- Activation log reports extension version and resolved profile ids.
+
+### Fixed
+
+- `autocorrect.debug` no longer dumps reasoning text unless `reasoningMode` is `log`.
+- Legacy migrated `"default"` localhost profile no longer forces `reasoningMode: log`.
 
 ## [0.2.0] - 2026-07-25
 

@@ -181,15 +181,37 @@ export class FixQueue implements vscode.Disposable {
     if (ledgerConflict) {
       const ok = await this.confirmRevertApplied(ledgerConflict);
       if (!ok) {
+        this.output.appendLine(
+          `[queue] apply cancelled — prior fix still in revert ledger ` +
+            `(lines ${ledgerConflict.region.startLine + 1}-${ledgerConflict.region.endLine + 1})`
+        );
         return false;
       }
-      await this.fileApply.enqueue(uri, () => revertChange(doc, ledgerConflict));
+      const reverted = await this.fileApply.enqueue(uri, () => revertChange(doc, ledgerConflict));
+      if (!reverted) {
+        this.output.appendLine(
+          `[queue] apply aborted — could not revert prior fix ` +
+            `(lines ${ledgerConflict.region.startLine + 1}-${ledgerConflict.region.endLine + 1}; ` +
+            `buffer no longer matches applied text). Undo manually or use Remove or Revert at Cursor.`
+        );
+        return false;
+      }
       this.ledger.remove(ledgerConflict.id);
+      this.output.appendLine(
+        `[queue] reverted prior fix on lines ${ledgerConflict.region.startLine + 1}-${ledgerConflict.region.endLine + 1}`
+      );
     }
 
     const result = await this.fileApply.enqueue(uri, () =>
       applyRegionReplace(doc, anchor, baseline, newText, meta, this.ledger, hash)
     );
+    if (!result.ok) {
+      this.output.appendLine(
+        result.stale
+          ? `[queue] apply stale — baseline text not found near lines ${startLine + 1}-${endLine + 1}`
+          : `[queue] apply rejected by editor`
+      );
+    }
     return result.ok;
   }
 
@@ -274,7 +296,14 @@ export class FixQueue implements vscode.Disposable {
       if (!revert) {
         return false;
       }
-      await this.fileApply.enqueue(uri, () => revertChange(doc, appliedOverlap));
+      const reverted = await this.fileApply.enqueue(uri, () => revertChange(doc, appliedOverlap));
+      if (!reverted) {
+        this.output.appendLine(
+          `[queue] enqueue aborted — could not revert prior fix on lines ` +
+            `${appliedOverlap.region.startLine + 1}-${appliedOverlap.region.endLine + 1}`
+        );
+        return false;
+      }
       this.ledger.remove(appliedOverlap.id);
     }
 
@@ -314,8 +343,7 @@ export class FixQueue implements vscode.Disposable {
       const update = await vscode.window.showWarningMessage(
         `Lines ${region.startLine + 1}-${region.endLine + 1} already queued for this profile. Update the queued item?`,
         { modal: true },
-        "Update",
-        "Cancel"
+        "Update"
       );
       if (update !== "Update") {
         return false;
@@ -394,11 +422,11 @@ export class FixQueue implements vscode.Disposable {
     const profiles = cfg().profiles;
     const pl = profiles.find((p) => p.id === existing.profileId);
     const region = normalizeRegion(existing.line, existing.endLine);
+    // Modal dialogs already include Cancel — do not pass a Cancel item (duplicates).
     const choice = await vscode.window.showWarningMessage(
       `${detail} Replace the queued item [${pl?.label ?? existing.profileId}] on lines ${region.startLine + 1}-${region.endLine + 1}?`,
       { modal: true },
-      "Replace",
-      "Cancel"
+      "Replace"
     );
     return choice === "Replace";
   }
@@ -413,8 +441,7 @@ export class FixQueue implements vscode.Disposable {
       `This selection overlaps your queued item (lines ${region.startLine + 1}-${region.endLine + 1}). Expand to ${merged.startLine + 1}-${merged.endLine + 1} and re-queue?`,
       { modal: true },
       "Expand & merge",
-      "Replace queued item",
-      "Cancel"
+      "Replace queued item"
     );
     if (choice === "Expand & merge") {
       return "merge";
@@ -431,8 +458,7 @@ export class FixQueue implements vscode.Disposable {
     const choice = await vscode.window.showWarningMessage(
       `Lines ${entry.region.startLine + 1}-${entry.region.endLine + 1} already have an applied autocorrect fix [${pl?.label ?? entry.profileId}] in the revert ledger. Revert it and continue?`,
       { modal: true },
-      "Revert & continue",
-      "Cancel"
+      "Revert & continue"
     );
     return choice === "Revert & continue";
   }

@@ -206,6 +206,28 @@ export class StagedExecutor {
       this.output.appendLine(`[staged] line count ${inLines} → ${outLines} (block replace)`);
     }
 
+    // Local models sometimes paste the whole prompt context into the block.
+    if (
+      attrs.op === "fix" &&
+      outLines > Math.max(inLines * 2, inLines + 4)
+    ) {
+      const choice = await vscode.window.showWarningMessage(
+        `Model expanded the block from ${inLines} to ${outLines} lines. Apply this large replace?`,
+        { modal: true },
+        "Apply"
+      );
+      if (choice !== "Apply") {
+        reportOutcome(`skipped large expansion (${inLines} → ${outLines} lines)`, {
+          kind: "skip",
+          output: this.output,
+          statusBar: this.statusBar,
+          logPrefix: "[staged]",
+          modelText: result,
+        });
+        return { ok: false };
+      }
+    }
+
     if (queue) {
       const queued = await this.queue.addBlock(
         doc,
@@ -262,7 +284,7 @@ export class StagedExecutor {
       });
       return { ok: true };
     }
-    reportOutcome("apply failed — baseline stale or edit rejected", {
+    reportOutcome("apply failed — see Output (ledger conflict, revert failed, or baseline stale)", {
       kind: "error",
       output: this.output,
       statusBar: this.statusBar,
@@ -290,10 +312,12 @@ export class StagedExecutor {
     }
     return (
       `You are a strict code autocorrector for ${profile.name}. ` +
-      `Fix typos and syntax errors only. Preserve style and comments where possible. ` +
-      `You may add lines if required to fix syntax (e.g. missing closing bracket on its own line). ` +
+      `Fix typos and syntax errors in the provided CODE block only. ` +
+      `Do not include surrounding context, other functions, or file headers in your reply. ` +
+      `Keep roughly the same number of lines; only add lines when required for syntax ` +
+      `(e.g. a missing closing bracket). ` +
       `If already correct, reply exactly: UNCHANGED\n` +
-      `Reply with ONLY the code — no fences, no prose.`
+      `Reply with ONLY the corrected CODE block — no fences, no prose.`
     );
   }
 

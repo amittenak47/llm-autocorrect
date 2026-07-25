@@ -5,6 +5,7 @@ import {
   isUnchanged,
   modelLines,
   normalizeModelText,
+  preserveLeadingIndent,
 } from "../../out/responseIngress.js";
 
 describe("responseIngress", () => {
@@ -27,5 +28,11 @@ describe("responseIngress", () => {
     assert.equal(fixForSingleLineTarget(["def f("]), "def f(");
     assert.equal(fixForSingleLineTarget(["", "def f(", ")"]), "def f(\n)");
     assert.equal(fixForSingleLineTarget(["  ", ""]), undefined);
+  });
+
+  it("preserveLeadingIndent keeps Enter auto-indent from the buffer", () => {
+    assert.equal(preserveLeadingIndent("    return a + b", "return a + b"), "    return a + b");
+    assert.equal(preserveLeadingIndent("\tpritnf(x)", "print(x)"), "\tprint(x)");
+    assert.equal(preserveLeadingIndent("  foo", "  bar"), "  bar");
   });
 });

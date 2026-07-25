@@ -14,6 +14,76 @@ function diagnosticsOnLine(uri: vscode.Uri, line: number): vscode.Diagnostic[] {
   );
 }
 
+function diagnosticsStartingOnLine(uri: vscode.Uri, line: number): vscode.Diagnostic[] {
+  return vscode.languages.getDiagnostics(uri).filter(
+    (d) =>
+      d.severity <= vscode.DiagnosticSeverity.Warning && d.range.start.line === line
+  );
+}
+
+/** Parse errors on the line below often cascade from a typo on the previous line. */
+const CASCADE_DIAG = /unexpected indentation|can be used only within|is not defined/i;
+const ROOT_DIAG =
+  /expected expression|invalid syntax|unterminated|was never closed|statements must be separated/i;
+
+/**
+ * When line L only has cascade diagnostics (e.g. return outside broken def),
+ * or a root diagnostic starts on a previous line and spans into L, fix upstream.
+ */
+export function resolveLineFixTarget(
+  uri: vscode.Uri,
+  doc: vscode.TextDocument,
+  line: number
+): number {
+  const overlapping = diagnosticsOnLine(uri, line);
+  if (overlapping.length === 0) {
+    return line;
+  }
+
+  // Root error often starts on the previous line but its range covers this line
+  // (e.g. "Expected expression" on `defn` spanning into the indented `return`).
+  for (const d of overlapping) {
+    if (d.range.start.line < line && ROOT_DIAG.test(d.message)) {
+      return d.range.start.line;
+    }
+  }
+
+  // Prefer diagnostics that *start* on this line so spanning root errors above
+  // do not defeat cascade detection.
+  const startingHere = diagnosticsStartingOnLine(uri, line);
+  const forCascade = startingHere.length > 0 ? startingHere : overlapping;
+  const allCascade = forCascade.every((d) => CASCADE_DIAG.test(d.message));
+  if (!allCascade) {
+    return line;
+  }
+
+  for (let prev = line - 1; prev >= 0 && prev >= line - 8; prev--) {
+    const text = doc.lineAt(prev).text;
+    if (text.trim().length === 0) {
+      continue;
+    }
+    const prevStart = diagnosticsStartingOnLine(uri, prev);
+    const prevDiags = prevStart.length > 0 ? prevStart : diagnosticsOnLine(uri, prev);
+    if (prevDiags.length === 0) {
+      continue;
+    }
+    const hasRoot = prevDiags.some((d) => ROOT_DIAG.test(d.message));
+    if (hasRoot || prevDiags.some((d) => d.severity === vscode.DiagnosticSeverity.Error)) {
+      return prev;
+    }
+  }
+  return line;
+}
+
+/** Previous non-blank line within a short lookback (fallback when LSP ranges are odd). */
+export function previousNonBlankLine(doc: vscode.TextDocument, line: number, maxLookback = 8): number | undefined {
+  for (let prev = line - 1; prev >= 0 && prev >= line - maxLookback; prev--) {
+    if (doc.lineAt(prev).text.trim().length > 0) {
+      return prev;
+    }
+  }
+  return undefined;
+}
 export function lineHasDiagnostic(uri: vscode.Uri, line: number): boolean {
   return diagnosticsOnLine(uri, line).length > 0;
 }
