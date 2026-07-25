@@ -13,8 +13,9 @@ export const AUTOCORRECT_BYOC_CRITERIA =
   "(3) Do not invent functions, variables, or identifiers that are not implied by fixing an " +
   "obvious misspelling of a keyword/builtin or of a name already present in ORIGINAL. " +
   "(4) Custom/domain names that are intentional must stay; only clear keyboard typos may change. " +
-  "(5) Reject style-only diffs: removing/adding semicolons, changing quote style, reformatting, " +
-  "or 'cleanup' when ORIGINAL had no real error. " +
+  "(5) Reject style-only diffs when ORIGINAL had no real error: optional semicolon add/remove, " +
+  "quote-style swaps, or pure reformatting. Removing invalid trailing garbage or fixing broken " +
+  "syntax (e.g. print(\"hi\")f; → print(\"hi\")) is a real fix — score 'yes'. " +
   "(6) No surrounding file context, no prose, no markdown fences — code only. " +
   "(7) The edit must be the smallest change that repairs the mistake.";
 

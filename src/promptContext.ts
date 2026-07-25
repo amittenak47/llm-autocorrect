@@ -1,7 +1,7 @@
 import { cfg } from "./config";
-import { formatUserContext, mergedContextNotes } from "./promptMerge";
+import { formatUserContext, formatUserInstruction, mergedContextNotes } from "./promptMerge";
 
-export { mergedContextNotes, formatUserContext } from "./promptMerge";
+export { mergedContextNotes, formatUserContext, formatUserInstruction } from "./promptMerge";
 
 /** Global prefix from settings (autocorrect.prompt.prefix). */
 export function globalPromptPrefix(): string {
@@ -24,8 +24,14 @@ export function lineFixUserMessage(contextLines: string, targetLine: string): st
 }
 
 export function blockFixUserMessage(code: string, sessionNote?: string): string {
-  if (!sessionNote?.trim() && !globalPromptPrefix()) {
-    return code;
+  const global = globalPromptPrefix();
+  const note = sessionNote?.trim() ?? "";
+  let body = `Code:\n${code}`;
+  if (note) {
+    body = formatUserInstruction(body, note);
   }
-  return withUserContext(`Code:\n${code}`, sessionNote);
+  if (global) {
+    body = formatUserContext(body, global);
+  }
+  return body;
 }

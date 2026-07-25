@@ -692,8 +692,8 @@
         "autocorrect.apply.onReject": {
           "type": "string",
           "enum": ["skip", "softApply"],
-          "default": "skip",
-          "description": "When Guardian still rejects after retries: skip (log only) or softApply (apply with soft label so you can revert)."
+          "default": "softApply",
+          "description": "When Guardian still rejects after retries: softApply (apply with soft label so you can revert; default) or skip (log only)."
         }
       }
     }

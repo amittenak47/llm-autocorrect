@@ -13,3 +13,12 @@ export function formatUserContext(body: string, context: string): string {
   }
   return `User context (for understanding only):\n${context}\n\n${body}`;
 }
+
+/** Staged context note — treat as an instruction to apply inside the CODE block. */
+export function formatUserInstruction(body: string, instruction: string): string {
+  const note = instruction.trim();
+  if (!note) {
+    return body;
+  }
+  return `INSTRUCTION (apply this change to the CODE block):\n${note}\n\n${body}`;
+}

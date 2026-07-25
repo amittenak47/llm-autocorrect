@@ -15,6 +15,7 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 ### Changed
 
 - Removed global `autocorrect.llm.reasoningMode` — use per-profile `reasoningMode` only (defaults to `off`).
+- Guardian rejects **soft-apply** by default (`apply.onReject`); Enter fixes still apply if the cursor returns to the line while waiting.
 
 ## [0.2.6] - 2026-07-25
 

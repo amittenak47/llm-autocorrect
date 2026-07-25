@@ -58,7 +58,7 @@ export function cfg() {
     guardianEnabled: c.get<boolean>("guardian.enabled", false),
     guardianProfileId: c.get<string>("guardian.profileId", "guardian"),
     guardianMaxRetries: c.get<number>("guardian.maxRetries", 1),
-    onReject: c.get<OnRejectMode>("apply.onReject", "skip"),
+    onReject: c.get<OnRejectMode>("apply.onReject", "softApply"),
     profiles,
     activeProfile,
     // Legacy — used when profiles array is empty fallback only

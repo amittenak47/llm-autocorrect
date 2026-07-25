@@ -392,11 +392,9 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
 
-    // Re-validate the buffer: the line must be untouched and the cursor elsewhere.
+    // Re-validate the buffer: the line must be untouched.
     if (doc.isClosed || line >= doc.lineCount || doc.lineAt(line).text !== original) {
-      return;
-    }
-    if (!force && this.cursorOnLine(doc, line)) {
+      this.log(`skip line ${line + 1}: buffer changed while waiting`);
       return;
     }
 
@@ -406,7 +404,10 @@ export class LineCorrector implements vscode.Disposable {
       return;
     }
 
-    const label = `line ${line + 1}`;
+    // If the cursor returned to this line while the LLM ran, still apply as soft
+    // so clicking around does not silently drop a finished correction.
+    const softBecauseCursor = !force && this.cursorOnLine(doc, line);
+    const label = softBecauseCursor ? `line ${line + 1} (soft)` : `line ${line + 1}`;
     const applied = await this.queue.applyChange(doc, line, line, original, corrected, {
       profileId: llmProfile.id,
       op: "fix",
@@ -417,7 +418,8 @@ export class LineCorrector implements vscode.Disposable {
       const firstLine = corrected.split("\n")[0];
       this.output.appendLine(
         `[line] ${doc.fileName}:${line + 1}  "${original.trim()}" -> "${firstLine.trim()}"` +
-          (extra > 0 ? ` (+${extra} line(s))` : "")
+          (extra > 0 ? ` (+${extra} line(s))` : "") +
+          (softBecauseCursor ? " (soft — cursor was on line)" : "")
       );
       this.flash(doc, line, extra);
     }

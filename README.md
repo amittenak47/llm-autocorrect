@@ -385,10 +385,10 @@ In settings: set `autocorrect.activeProfile` to `"local"`, then enable the judge
 "autocorrect.guardian.enabled": true,
 "autocorrect.guardian.profileId": "guardian",
 "autocorrect.guardian.maxRetries": 1,
-"autocorrect.apply.onReject": "skip"
+"autocorrect.apply.onReject": "softApply"
 ```
 
-`onReject: "softApply"` applies a rejected fix with a soft label so you can revert. Judge failures fail-open (accept the candidate).
+`onReject: "softApply"` (default) applies a rejected fix with a soft label so you can revert. `skip` only logs. Judge failures fail-open (accept the candidate).
 
 ---
 
@@ -546,7 +546,7 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 | `autocorrect.guardian.enabled` | `false` | Score fix/paste replies with Granite Guardian before apply |
 | `autocorrect.guardian.profileId` | `guardian` | Judge profile (default `:8081`) |
 | `autocorrect.guardian.maxRetries` | `1` | Extra fixer regenerations after Guardian `no` |
-| `autocorrect.apply.onReject` | `skip` | After final reject: `skip` (log) or `softApply` (apply + revert) |
+| `autocorrect.apply.onReject` | `softApply` | After final reject: `softApply` (apply + revert) or `skip` (log only) |
 | `autocorrect.provider` | `groq` | **Legacy** — only if `profiles` is empty |
 | `autocorrect.model` | `""` | **Legacy** model id |
 | `autocorrect.baseUrl` | `""` | **Legacy** openai-compatible URL |

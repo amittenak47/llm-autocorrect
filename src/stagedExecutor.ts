@@ -127,15 +127,17 @@ export class StagedExecutor {
 
     let response: string;
     try {
+      const hasInstruction = !!attrs.contextNote?.trim();
       response = await this.statusBar.withBusy(() =>
         this.router.complete({
-          system: this.systemPrompt(attrs.op, langProfile),
+          system: this.systemPrompt(attrs.op, langProfile, attrs.contextNote),
           user: userMsg,
           maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(text)),
           signal: new AbortController().signal,
           profileId: llmProfile.id,
-          kind: attrs.op === "fix" ? "fix" : "raw",
-          judgeOriginal: attrs.op === "fix" ? text : undefined,
+          // Instruction notes are deliberate edits (typing, renames, etc.) — not Guardian typo-judging.
+          kind: attrs.op === "fix" && !hasInstruction ? "fix" : "raw",
+          judgeOriginal: attrs.op === "fix" && !hasInstruction ? text : undefined,
         })
       );
     } catch (err) {
@@ -181,6 +183,16 @@ export class StagedExecutor {
 
     let result = normalizeModelText(response);
     if (attrs.op === "fix" && isUnchanged(result)) {
+      if (attrs.contextNote?.trim()) {
+        reportOutcome("model returned UNCHANGED despite context note", {
+          kind: "skip",
+          output: this.output,
+          statusBar: this.statusBar,
+          logPrefix: "[staged]",
+          modelText: response,
+        });
+        return { ok: false };
+      }
       reportOutcome("already correct", { kind: "ok", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]" });
       return { ok: true };
     }
@@ -326,7 +338,7 @@ export class StagedExecutor {
     return { ok: false };
   }
 
-  private systemPrompt(op: StagedOp, profile: LanguageProfile): string {
+  private systemPrompt(op: StagedOp, profile: LanguageProfile, contextNote?: string): string {
     if (op === "caveman") {
       return (
         `You add caveman-style comments to ${profile.name} code: ultra-short inline comments ` +
@@ -341,6 +353,15 @@ export class StagedExecutor {
         `Never modify, add, or remove code lines. Do not invent classes, imports, or functions. ` +
         `The snippet may be incomplete — do not expand it. ` +
         `Reply with ONLY the code — no fences, no prose.`
+      );
+    }
+    if (contextNote?.trim()) {
+      return (
+        `You edit the provided ${profile.name} CODE block to follow the user's instruction. ` +
+        `Apply the requested change inside that block only (e.g. add type annotations, fix names). ` +
+        `Do not paste surrounding file context or unrelated helpers. ` +
+        `Do not reply UNCHANGED if the instruction asks for a change that is not already present. ` +
+        `Reply with ONLY the updated CODE block — no fences, no prose.`
       );
     }
     return (
