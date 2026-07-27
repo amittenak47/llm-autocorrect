@@ -1,4 +1,5 @@
 .vscode/**
+.cursor/**
 src/**
 tests/**
 CONTRIBUTING.md

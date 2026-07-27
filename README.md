@@ -385,7 +385,7 @@ Judge   http://127.0.0.1:8081/v1   →  autocorrect.guardian.profileId = "guardi
 If your `llama-cli` was built **without HTTPS/OpenSSL**, use Python instead of `-hf`:
 
 ```bat
-cd C:\Users\Amit\llama.cpp\models
+cd %USERPROFILE%\llama.cpp\models
 
 python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-4.1-8b-GGUF','granite-4.1-8b-Q4_K_M.gguf', local_dir='.'))"
 python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-4.1-8b-GGUF','granite-4.1-8b-Q8_0.gguf', local_dir='.'))"
@@ -405,13 +405,13 @@ llama-cli -hf ibm-granite/granite-4.1-8b-GGUF:Q8_0 -p "ping" -n 8
 3. Serve the **same** base GGUF as the fixer family, with the adapter attached:
 
 ```bat
-cd C:\Users\Amit\llama.cpp\build_ninja\bin
+cd %USERPROFILE%\llama.cpp\build_ninja\bin
 
 REM Fixer (no LoRA)
-llama-server.exe -m C:\Users\Amit\llama.cpp\models\granite-4.1-8b-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 32768
+llama-server.exe -m %USERPROFILE%\llama.cpp\models\granite-4.1-8b-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 32768
 
 REM Judge = same base + Guardian LoRA (preferred)
-llama-server.exe -m C:\Users\Amit\llama.cpp\models\granite-4.1-8b-Q4_K_M.gguf --lora C:\Users\Amit\llama.cpp\models\guardian-core.gguf --host 127.0.0.1 --port 8081 -c 8192
+llama-server.exe -m %USERPROFILE%\llama.cpp\models\granite-4.1-8b-Q4_K_M.gguf --lora %USERPROFILE%\llama.cpp\models\guardian-core.gguf --host 127.0.0.1 --port 8081 -c 8192
 ```
 
 Use **Q8_0** on `:8080` if you want a higher-quality fixer; keep the judge on **Q4 + LoRA** to save VRAM.
@@ -421,9 +421,9 @@ Use **Q8_0** on `:8080` if you want a higher-quality fixer; keep the judge on **
 If you have not converted a LoRA yet, a second full Guardian GGUF still works with the built-in `guardian` profile:
 
 ```bat
-python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-guardian-4.1-8b-GGUF','granite-guardian-4.1-8b-Q4_K_M.gguf', local_dir=r'C:\Users\Amit\llama.cpp\models'))"
+python -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('ibm-granite/granite-guardian-4.1-8b-GGUF','granite-guardian-4.1-8b-Q4_K_M.gguf', local_dir=r'%USERPROFILE%\\llama.cpp\\models'))"
 
-llama-server.exe -m C:\Users\Amit\llama.cpp\models\granite-guardian-4.1-8b-Q4_K_M.gguf --host 127.0.0.1 --port 8081 -c 8192
+llama-server.exe -m %USERPROFILE%\llama.cpp\models\granite-guardian-4.1-8b-Q4_K_M.gguf --host 127.0.0.1 --port 8081 -c 8192
 ```
 
 ##### 4) Extension settings
