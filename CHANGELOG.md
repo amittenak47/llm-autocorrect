@@ -4,6 +4,19 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-27
+
+### Added
+
+- **Typing harness** — **Autocorrect: Run Typing Harness** replays JSON from `tests/harness/prepare_plan.py` (LeetCode solutions with injected typos / foreign lines). Each step inserts the line, then a separate `\n` so Enter autocorrect fires. See `tests/harness/README.md`.
+- README **Recommended model usage** — cloud vs local profiles, Granite 4.1 fixer + Guardian LoRA judge stack, and what *not* to use (FIM autocomplete models, reasoning models on Enter).
+
+### Changed
+
+- **Guardian judge** — stricter yes/no: prefer `no` when unsure; reject style-only churn and fixes that change identifiers or string literals without a minimal typo/syntax repair.
+- **Staged context notes** — modifier **X** instructions skip Guardian (deliberate edits, not blind typo fixes).
+- **`apply.onReject`** default **`softApply`** — rejected candidates still apply with revert-ledger undo; Enter line fixes still apply if the cursor returns to the line while Guardian/regeneration is pending.
+
 ## [0.2.7] - 2026-07-25
 
 ### Added

@@ -21,7 +21,7 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-## Features (v0.2.7)
+## Features (v0.3.0)
 
 | Feature | Summary |
 | --- | --- |
@@ -44,8 +44,9 @@ The extension is the same in VS Code and Cursor — only **language server (LSP)
 | **LSP or deliberate** | **Automatic:** Enter can require an LSP squiggle first (`line.requireDiagnostic`). **Deliberate:** menu/staged sends on demand (`fix.requireDiagnostic` optional). **Off:** `disableAutocorrect` stops Enter autocorrect entirely. |
 | **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). Faithfulness check rejects invented programs. |
 | **Local inference** | `openai-compatible` + localhost → **60s** default timeout; **2048** default line `max_tokens`. |
+| **Typing harness** | **Autocorrect: Run Typing Harness** — replay `prepare_plan.py` JSON (LeetCode solutions with typos) to stress-test Enter autocorrect. See `tests/harness/README.md`. |
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (through **v0.2.7**).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (through **v0.3.0**).
 
 You bring your own API key. Keys live in the editor's secret storage, not in settings files.
 
@@ -559,13 +560,41 @@ Palette: **`Autocorrect: Translate Selection`**.
 | Review Queued Fixes | All profiles |
 | Apply All Queued Fixes | Apply entire queue |
 | Clear Queued Fixes | Empty queue |
+| Run Typing Harness | Replay `prepare_plan.py` JSON for Enter autocorrect stress tests |
 | Toggle Review Before Apply Mode | Enter fixes → review before apply |
 | Set API Key | Per profile |
 | Command Menu (QuickPick) | `/menu`, `/block`, `/line`, etc. |
 
 ---
 
-## Groq setup (recommended)
+## Recommended model usage
+
+Autocorrect is **surgical line/block repair**, not inline ghost-text completion. Pick profiles by job — not every model fits every path.
+
+| Job | Profile | Model / stack | Key settings |
+| --- | --- | --- | --- |
+| **Enter line fixes (cloud)** | `groq` | `llama-3.1-8b-instant` | `line.requireDiagnostic: true` (saves tokens); `reasoningMode: "off"`; `contextPolicy: minimal` |
+| **Enter line fixes (local / private)** | `local` | **Granite 4.1 8B** Q4_K_M on `:8080` | `reasoningMode: "off"`; `maxTokensLine: 2048`; on Cursor set `line.requireDiagnostic: false` if squiggles are quiet |
+| **Quality gate (optional)** | `guardian` | **Guardian LoRA** on same base @ `:8081` (full Guardian GGUF fallback) | `guardian.enabled: true`; `maxRetries: 1`; `apply.onReject: softApply` |
+| **Staged block / docs / caveman** | `groq` or `local` | Same as above | `fix.requireDiagnostic: false` (default); tiers **1**–**2** usually enough; use **X** for one-off instructions |
+| **Paste-translate** | `groq` or `local` | Same fixer profile | Faithfulness prefilter + Guardian when enabled |
+| **Not this extension** | — | Granite **H-Tiny** / FIM autocomplete, 30B dense models | Use a separate completion tool; too slow or wrong task for Enter repair |
+
+**Daily-driver combos**
+
+1. **Fastest cloud** — Groq only, diagnostic gate on, no Guardian. Good for laptops without a GPU.
+2. **Recommended local (24 GB GPU)** — Granite 4.1 8B fixer + Guardian LoRA judge (see [tutorial 11](#11-multi-profile-llm-modifiers-m-shiftm)). One base GGUF + small adapter beats two full 8B models on VRAM.
+3. **Hybrid** — Groq for quick fixes, local Granite for large staged blocks (`M` / **Shift+M** before send).
+
+**Always**
+
+- Set **`reasoningMode: "off"`** on every fixer profile — reasoning burns `max_tokens` and yields empty `content` on local servers.
+- Use **named `profiles` only** — remove legacy `autocorrect.provider` / `baseUrl` / `model` so logs show `local`, not `default`.
+- **Staged X notes** are instructions (add types, preserve names) — Guardian skips them by design.
+
+---
+
+## Groq setup (recommended cloud)
 
 1. [console.groq.com](https://console.groq.com) → API key (`gsk_…`).
 2. **Autocorrect: Set API Key** → groq.
@@ -701,7 +730,7 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
 | **`already correct` / no edit** | Model returned the same line or `UNCHANGED`. Normal — no apply, but you may still have paid for the prompt. |
 | **`whitespace-only diff` / indent no-op** | Model echoed the target without indent. v0.2.3 reattaches buffer indent and retries the previous line when cascade/root diagnostics point upstream. |
-| **`empty content — reasoning consumed tokens`** | Reasoning model burned the output budget. Set profile `reasoningMode: "off"`, raise `maxTokensLine` (localhost default 2048), and confirm Output shows `v0.2.1+`. |
+| **`empty content — reasoning consumed tokens`** | Reasoning model burned the output budget. Set profile `reasoningMode: "off"`, raise `maxTokensLine` (localhost default 2048), and confirm Output shows `v0.3.0`. |
 | **Wrong profile / `default` in logs** | Remove legacy `autocorrect.provider` / `baseUrl` / `model` when using `profiles`. Activation should list your profile ids. |
 | **Range locked on enqueue** | Overlapping enqueue shows a modal: **Replace**, **Expand & merge** (same profile), **Revert & continue** (if an applied fix overlaps), or **Cancel**. |
 | **Remove / revert at cursor** | Command Palette → **Remove or Revert Queued Change at Cursor** — drops a queued item, or reverts a ledger entry if the buffer still matches. |
