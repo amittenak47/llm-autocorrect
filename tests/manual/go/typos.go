@@ -1,9 +1,12 @@
 // Go DATA: 10 cases; keep package/import when isolating a function.
 // Enter fix: put the cursor at the END of a broken line and press Enter. The
 // extension checks the line just left. Comment lines and blank lines are skipped.
-// Manual line fix: menu (Ctrl+Shift+;) then C, or the command
+// Manual line fix: menu (Ctrl+Shift+; / Cmd+Shift+; on macOS) then C, or the command
 // "Autocorrect: Correct Line Near Cursor".
 // Output -> "LLM Autocorrect" shows every step (set autocorrect.debug: true).
+// With line.wholeStatement true, ordinary body targets stay on one line:
+// enclosing block braces are not continuations. Check TARGET in
+// [line] prompt (user):; open parentheses/brackets still expand a statement.
 // No Go LSP is installed here: gate-on uses parser syntax errors only.
 // For balanced name typos use line.requireDiagnostic false or manual C.
 package main
@@ -65,6 +68,8 @@ func signLabel(value int) string {
     }
 }
 
+// The initial TARGET is only the return/final-expression line unless redirected;
+// a retry targets only the broken declaration, never the enclosing function.
 // 9. UPSTREAM: copy whole function; set line.requireDiagnostic false (no Go LSP).
 // Enter at END of return total. Expect initial no-op then retrying upstream
 // line ...: the declaration has real parser syntax evidence; return stays intact.

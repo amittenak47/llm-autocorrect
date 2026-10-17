@@ -92,3 +92,32 @@ describe("post-apply verification verdict", () => {
     assert.equal(verdict([], []), "keep");
   });
 });
+
+
+describe("parser verification maps error locations", () => {
+  const p = (line) => diag(line, "syntax error (parser)");
+  const verify = (before, after, extra = {}) => verdict(before.map(p), after.map(p), { countOnly: true, ...extra });
+
+  it("reverts replacement locations at an equal or higher count", () => {
+    assert.equal(verify([5], [6]), "revert");
+    assert.equal(verify([4], [5]), "revert");
+    assert.equal(verify([5], [5, 5]), "revert");
+    assert.equal(verify([5, 6], [4]), "keep");
+    assert.equal(verify([5], [6], { ignoreLines: [6] }), "keep");
+  });
+
+  it("treats the replaced region as one location after expanding or contracting", () => {
+    assert.equal(verify([5], [7], { lineDelta: 2 }), "stillFailing");
+    assert.equal(verify([5], [8], { lineDelta: 2 }), "revert");
+    assert.equal(verify([7], [5], { region: { startLine: 5, endLine: 7 }, lineDelta: -2 }), "stillFailing");
+    assert.equal(verify([5], [7], { region: { startLine: 5, endLine: 7 } }), "stillFailing");
+  });
+
+  it("shifts errors after the region and keeps earlier locations unchanged", () => {
+    assert.equal(verify([6], [8], { lineDelta: 2 }), "keep");
+    assert.equal(verify([6], [6], { lineDelta: 2 }), "revert");
+    assert.equal(verify([8], [6], { region: { startLine: 5, endLine: 7 }, lineDelta: -2 }), "keep");
+    assert.equal(verify([4, 5, 6], [4, 8], { lineDelta: 2 }), "keep");
+    assert.equal(verify([4], [4], { lineDelta: 2 }), "keep");
+  });
+});

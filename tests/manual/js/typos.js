@@ -1,9 +1,12 @@
 // JavaScript DATA: 10 cases. Isolate one function with its context per trial.
 // Enter fix: put the cursor at the END of a broken line and press Enter. The
 // extension checks the line just left. Comment lines and blank lines are skipped.
-// Manual line fix: menu (Ctrl+Shift+;) then C, or the command
+// Manual line fix: menu (Ctrl+Shift+; / Cmd+Shift+; on macOS) then C, or the command
 // "Autocorrect: Correct Line Near Cursor".
 // Output -> "LLM Autocorrect" shows every step (set autocorrect.debug: true).
+// With line.wholeStatement true, ordinary body targets stay on one line:
+// enclosing block braces are not continuations. Check TARGET in
+// [line] prompt (user):; open parentheses/brackets still expand a statement.
 // Name/method typos need an LSP diagnostic or line.requireDiagnostic false.
 
 // 1. Console method receiver.
@@ -64,6 +67,8 @@ function signLabel(value) {
     }
 }
 
+// The initial TARGET is only the return/final-expression line unless redirected;
+// a retry targets only the broken declaration, never the enclosing function.
 // 9. UPSTREAM: copy whole function; set line.requireDiagnostic false (root is
 // above target). Enter at END of return total;. Expect initial no-op on return,
 // then retrying upstream line ... using real syntax evidence; body unchanged.

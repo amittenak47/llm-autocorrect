@@ -121,9 +121,10 @@ export function docsPreservesCode(original: string, result: string, profile: Lan
     .filter((line) => line.length > 0 && !isLineComment(line));
   let next = 0;
   let closing: string | undefined;
+  let insertedBlock = false;
   for (const line of result.split("\n").map((line) => line.trimEnd())) {
     const trimmed = line.trimStart();
-    const matched = next < code.length && line === code[next];
+    const matched: boolean = !insertedBlock && next < code.length && line === code[next];
     if (matched) {
       next++;
     }
@@ -135,6 +136,7 @@ export function docsPreservesCode(original: string, result: string, profile: Lan
           return false;
         }
         closing = undefined;
+        insertedBlock = false;
       }
       continue;
     }
@@ -153,6 +155,7 @@ export function docsPreservesCode(original: string, result: string, profile: Lan
     const end = trimmed.indexOf(delimiter, opener.length);
     if (end < 0) {
       closing = delimiter;
+      insertedBlock = !matched;
     } else {
       const suffix = trimmed.slice(end + delimiter.length);
       if (!matched && suffix.trim() && !isLineComment(suffix)) {

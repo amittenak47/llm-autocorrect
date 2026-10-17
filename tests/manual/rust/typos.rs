@@ -1,9 +1,12 @@
 // Rust DATA: 10 cases. Isolate each function; do not compile this fixture.
 // Enter fix: put the cursor at the END of a broken line and press Enter. The
 // extension checks the line just left. Comment lines and blank lines are skipped.
-// Manual line fix: menu (Ctrl+Shift+;) then C, or the command
+// Manual line fix: menu (Ctrl+Shift+; / Cmd+Shift+; on macOS) then C, or the command
 // "Autocorrect: Correct Line Near Cursor".
 // Output -> "LLM Autocorrect" shows every step (set autocorrect.debug: true).
+// With line.wholeStatement true, ordinary body targets stay on one line:
+// enclosing block braces are not continuations. Check TARGET in
+// [line] prompt (user):; open parentheses/brackets still expand a statement.
 // rust-analyzer has limited diagnostics for lone .rs outside a Cargo project.
 // Name/macro typos may need line.requireDiagnostic false or manual C.
 
@@ -55,6 +58,8 @@ fn sign_label(value: i32) -> &'static str {
     }
 }
 
+// The initial TARGET is only the return/final-expression line unless redirected;
+// a retry targets only the broken declaration, never the enclosing function.
 // UPSTREAM: copy whole function; set line.requireDiagnostic false; Enter at END
 // of final expression total. Expect no-op then retrying upstream line ... using
 // real syntax evidence, or a direct redirect with an LSP cascade; total retained.

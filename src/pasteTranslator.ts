@@ -100,6 +100,10 @@ export class PasteTranslator implements vscode.Disposable {
 
   /** Manual fallback: "Autocorrect: Translate Selection to Current File's Language". */
   async translateSelection(): Promise<void> {
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return;
+    }
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.selection.isEmpty) {
       void vscode.window.showInformationMessage("Autocorrect: select the code to translate first.");

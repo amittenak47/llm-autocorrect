@@ -15,7 +15,7 @@ export function verifyVerdict(opts: {
   diagnosticsUpdated: boolean;
   /** Post-apply lines the user edited while we waited (e.g. half-typed code below the fix) — not the fix's fault. */
   ignoreLines?: number[];
-  /** Parser errors all share one message, so compare counts instead of messages. */
+  /** Parser errors all share one message, so compare counts and mapped locations instead of messages. */
   countOnly?: boolean;
 }): VerifyVerdict {
   if (!opts.diagnosticsUpdated) {
@@ -29,7 +29,12 @@ export function verifyVerdict(opts: {
   const before = errorsIn(opts.before, startLine, endLine);
   const after = errorsIn(opts.after, startLine, endLine + opts.lineDelta).filter((d) => !ignored.has(d.startLine));
   if (opts.countOnly) {
-    if (after.length > before.length) {
+    const regionEnd = opts.region.endLine + opts.lineDelta;
+    const inRegion = (line: number): boolean => line >= opts.region.startLine && line <= regionEnd;
+    const mapped = new Set(before.map((d) => d.startLine < opts.region.startLine ? d.startLine :
+      d.startLine <= opts.region.endLine ? opts.region.startLine : d.startLine + opts.lineDelta));
+    const newLocation = after.some((d) => !mapped.has(inRegion(d.startLine) ? opts.region.startLine : d.startLine));
+    if (after.length > before.length || (newLocation && after.length >= before.length)) {
       return "revert";
     }
     const fixedLinesHadErrors = errorsIn(before, opts.region.startLine, opts.region.endLine).length > 0;

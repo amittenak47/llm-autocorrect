@@ -11,6 +11,7 @@ import { reportOutcome } from "./outcomes";
 import { skipExcludedDocument, skipSecretTarget } from "./privacy";
 import { applyLineChange } from "./regionLock";
 import { StatusBar } from "./statusBar";
+import { formatUserContext, globalPromptPrefix } from "./promptContext";
 
 interface Suggestion {
   id: number;
@@ -65,6 +66,10 @@ export class LogicReviewer implements vscode.Disposable {
   }
 
   async run(): Promise<void> {
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return;
+    }
     const editor = vscode.window.activeTextEditor;
     const noTarget = "Autocorrect: select code, stage a block, or put the cursor in a function";
     if (!editor) {
@@ -94,6 +99,7 @@ export class LogicReviewer implements vscode.Disposable {
     if (skipSecretTarget(text, profile)) return;
     const maxIssues = Number.isFinite(config.logicMaxIssues) ? Math.max(0, Math.floor(config.logicMaxIssues)) : 5;
     const prompt = buildLogicPrompt(text, language.name, maxIssues);
+    prompt.user = formatUserContext(prompt.user, globalPromptPrefix());
     const version = doc.version;
     const key = doc.uri.toString();
     this.pending.get(key)?.abort();

@@ -1,9 +1,12 @@
 // C++ DATA: 10 cases; isolate one function and needed includes per trial.
 // Enter fix: put the cursor at the END of a broken line and press Enter. The
 // extension checks the line just left. Comment lines and blank lines are skipped.
-// Manual line fix: menu (Ctrl+Shift+;) then C, or the command
+// Manual line fix: menu (Ctrl+Shift+; / Cmd+Shift+; on macOS) then C, or the command
 // "Autocorrect: Correct Line Near Cursor".
 // Output -> "LLM Autocorrect" shows every step (set autocorrect.debug: true).
+// With line.wholeStatement true, ordinary body targets stay on one line:
+// enclosing block braces are not continuations. Check TARGET in
+// [line] prompt (user):; open parentheses/brackets still expand a statement.
 // Balanced name/member typos need an LSP diagnostic, gate-off Enter, or C.
 #include <iostream>
 #include <string>
@@ -61,6 +64,8 @@ int signValue(int value) {
     }
 }
 
+// The initial TARGET is only the return/final-expression line unless redirected;
+// a retry targets only the broken declaration, never the enclosing function.
 // UPSTREAM: copy function; set line.requireDiagnostic false; Enter at END of
 // return total;. Expect no-op then retrying upstream line ... using syntax
 // evidence, or a direct redirect with an LSP cascade; return stays unchanged.

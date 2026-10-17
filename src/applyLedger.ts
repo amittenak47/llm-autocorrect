@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { blockLineRange } from "./blockApply";
 import { LineRegion, lineDeltaAfterReplace, baselineHash, shiftRegion, regionsOverlap } from "./regionLock";
 import { StagedOp } from "./stagedSession";
+import { toDocumentEol } from "./documentEol";
 
 let nextId = 1;
 
@@ -153,6 +154,7 @@ export async function applyRegionReplace(
     .filter((entry) => regionsOverlap(entry.region, located))
     .map((entry) => entry.id);
   const range = blockLineRange(doc, located.startLine, located.endLine);
+  newText = toDocumentEol(newText, doc.eol === vscode.EndOfLine.CRLF);
   const edit = new vscode.WorkspaceEdit();
   edit.replace(doc.uri, range, newText);
   const ok = await vscode.workspace.applyEdit(edit);

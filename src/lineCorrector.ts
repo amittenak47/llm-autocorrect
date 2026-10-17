@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { redactSecrets } from "./secretRedact";
 import { skipExcludedDocument, skipSecretTarget } from "./privacy";
 import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
 import { effectiveMaxTokensLine } from "./profiles";
@@ -213,6 +214,10 @@ export class LineCorrector implements vscode.Disposable {
 
   /** Menu C: correct cursor line, else previous non-blank line. */
   async correctLineNearCursor(queue = false): Promise<void> {
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return;
+    }
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
@@ -248,6 +253,10 @@ export class LineCorrector implements vscode.Disposable {
   }
 
   async executeQueuedLine(fix: QueuedFix): Promise<boolean> {
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return false;
+    }
     const doc = this.docFor(vscode.Uri.parse(fix.uri));
     if (!doc || doc.isClosed || fix.line >= doc.lineCount) {
       return false;
@@ -307,10 +316,11 @@ export class LineCorrector implements vscode.Disposable {
       return "skipped";
     }
     const canRun = (): boolean => {
+      const c = cfg();
+      if (!c.enabled) return false;
       if (force) {
         return true;
       }
-      const c = cfg();
       return c.enabled && c.lineEnabled && c.languages.includes(doc.languageId);
     };
     if (!canRun()) {
@@ -393,7 +403,7 @@ export class LineCorrector implements vscode.Disposable {
       const c = cfg();
       const fileLines = doc.getText().split(/\r?\n/);
       const span = c.lineWholeStatement && line === startingLine
-        ? statementSpan(fileLines, line, 10, profile.lineCommentPrefixes)
+        ? statementSpan(fileLines, line, 10, profile.lineCommentPrefixes, doc.languageId === "python")
         : { startLine: line, endLine: line };
       const multiline = span.startLine !== span.endLine;
       original = fileLines.slice(span.startLine, span.endLine + 1).join("\n");
@@ -471,7 +481,7 @@ export class LineCorrector implements vscode.Disposable {
           line: d.range.start.line, character: d.range.start.character, message: d.message, severity: d.severity,
         })),
         ...parserDiags.map((d) => ({ line: d.startLine, character: d.character, message: d.message, severity: d.severity })),
-      ]) : "";
+      ].map((d) => ({ ...d, message: c.redactSecrets ? redactSecrets(d.message).text : d.message }))) : "";
       const finalUser = lineFixUserMessage(
         assembled.supplementary.trim() || "(start of file)",
         original, diagnostics, c.promptIncludeNames ? names.slice(0, 60) : undefined, multiline
@@ -482,21 +492,25 @@ export class LineCorrector implements vscode.Disposable {
       }
       this.output.appendLine(`[line] calling LLM for ${doc.fileName}:${line + 1}`);
 
+      const system =
+        `You are a strict ${multiline ? "code" : "single-line code"} autocorrector for ${profile.name}. ` +
+        `The user shows you surrounding context and ${multiline ? "TARGET lines" : "one TARGET line"}. ` +
+        `If the TARGET ${multiline ? "lines contain" : "line contains"} a typo or syntax error, reply with the corrected line(s), ` +
+        `preserving leading indentation on the first line. ` +
+        `You may add lines after the target when required to fix syntax (e.g. a missing closing bracket). ` +
+        `If the line is already correct, reply with exactly: UNCHANGED\n` +
+        `Never add explanations, quotes, or code fences. ` +
+        `Never rewrite working code stylistically — fix mistakes only. ` +
+        `If diagnostics are listed, they come from the language server and usually point at the real mistake; fix that mistake.` +
+        (c.promptExamples ? `\n\nExamples:\n${lineFixExamples(doc.languageId)}` : "");
+
       let response: string;
       try {
+        this.log(`prompt (system): ${system.slice(0, 3000)}`);
+        this.log(`prompt (user): ${finalUser.slice(0, 3000)}`);
         response = await this.statusBar.withBusy(() =>
           this.router.complete({
-            system:
-              `You are a strict ${multiline ? "code" : "single-line code"} autocorrector for ${profile.name}. ` +
-              `The user shows you surrounding context and ${multiline ? "TARGET lines" : "one TARGET line"}. ` +
-              `If the TARGET ${multiline ? "lines contain" : "line contains"} a typo or syntax error, reply with the corrected line(s), ` +
-              `preserving leading indentation on the first line. ` +
-              `You may add lines after the target when required to fix syntax (e.g. a missing closing bracket). ` +
-              `If the line is already correct, reply with exactly: UNCHANGED\n` +
-              `Never add explanations, quotes, or code fences. ` +
-              `Never rewrite working code stylistically — fix mistakes only. ` +
-              `If diagnostics are listed, they come from the language server and usually point at the real mistake; fix that mistake.` +
-              (c.promptExamples ? `\n\nExamples:\n${lineFixExamples(doc.languageId)}` : ""),
+            system,
             user: finalUser,
             maxTokens: effectiveMaxTokensLine(llmProfile),
             signal: abort.signal,

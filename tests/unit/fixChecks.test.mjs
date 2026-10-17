@@ -51,3 +51,21 @@ test("edit distance handles insertions, deletions, substitutions, and empty stri
   assert.equal(editDistance("same", "same"), 0);
   assert.equal(editDistance("pritn", "print"), 2);
 });
+
+
+test("literal preservation compares exact contents and multiplicity", () => {
+  assert.equal(check('print("hello")', 'print("hello world")').reason, "changed string literal");
+  assert.equal(check('msg = "Hello {user}"', 'msg = "Hello {admin}"').reason, "changed string literal");
+  assert.equal(check('f("a", "a")', 'f("a", "b")').reason, "changed string literal");
+  assert.equal(check('f("a", "b")', 'f("b", "a")').ok, true);
+  assert.equal(check('print("")', 'print("hello")').reason, "changed string literal");
+  assert.equal(check("console.log(`hello`);", "console.log(`hello world`);", [], "javascript").reason, "changed string literal");
+});
+
+test("Python f-string prefixes control brace masking for both literal lists", () => {
+  for (const prefix of ["f", "F", "fr", "Fr", "rf", "RF"]) {
+    assert.equal(check(`print(${prefix}"total {reslt}")`, `print(${prefix}"total {result}")`, ["result"]).ok, true);
+  }
+  assert.equal(check('print("total {reslt}")', 'print(f"total {result}")', ["result"]).reason, "changed string literal");
+  assert.equal(check('msg = "total ${totl}"', 'msg = "total ${total}"', ["total"]).ok, true);
+});

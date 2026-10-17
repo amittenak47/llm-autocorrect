@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { redactSecrets } from "./secretRedact";
 import { skipExcludedDocument, skipSecretTarget } from "./privacy";
 import { blockLineRange } from "./blockApply";
 import { blockMaxTokens } from "./blockMath";
@@ -59,6 +60,10 @@ export class StagedExecutor {
     queue: boolean,
     fromQueue = false
   ): Promise<ExecuteResult> {
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return { ok: false };
+    }
     if (skipExcludedDocument(editor.document)) return { ok: false };
     const langProfile = PROFILES[editor.document.languageId];
     if (!langProfile || !cfg().languages.includes(editor.document.languageId)) {
@@ -117,6 +122,10 @@ export class StagedExecutor {
 
     const parserErrors = cfg().syntaxUseParser && this.syntaxChecker.supports(doc.languageId)
       ? await this.syntaxChecker.errors(doc.languageId, doc.getText()) : undefined;
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return { ok: false };
+    }
     if (!shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output,
       parserErrors?.map((error) => error.line))) {
       reportOutcome("no LSP error in block — skipped (fix.requireDiagnostic)", {
@@ -145,7 +154,7 @@ export class StagedExecutor {
           line: d.range.start.line, character: d.range.start.character, message: d.message, severity: d.severity,
         })),
         ...parserDiags,
-      ]) : "";
+      ].map((d) => ({ ...d, message: c.redactSecrets ? redactSecrets(d.message).text : d.message }))) : "";
     const userMsg = blockFixUserMessage(codePayload, attrs.contextNote, diagnostics,
       plainFix && c.promptIncludeNames ? names.slice(0, 60) : undefined);
 
@@ -166,9 +175,14 @@ export class StagedExecutor {
     let soft = false;
     try {
       const hasInstruction = !!attrs.contextNote?.trim();
+      const system = this.systemPrompt(attrs.op, langProfile, attrs.contextNote);
+      if (c.debug) {
+        this.output.appendLine(`[staged] prompt (system): ${system.slice(0, 3000)}`);
+        this.output.appendLine(`[staged] prompt (user): ${userMsg.slice(0, 3000)}`);
+      }
       response = await this.statusBar.withBusy(() =>
         this.router.complete({
-          system: this.systemPrompt(attrs.op, langProfile, attrs.contextNote),
+          system,
           user: userMsg,
           maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(textLf)),
           signal: new AbortController().signal,

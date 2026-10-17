@@ -1,6 +1,7 @@
 /** Find unclosed brackets and explicit continuations before the line just left. */
 export function statementSpan(
-  lines: string[], line: number, maxLines = 10, commentPrefixes: string[] = ["#", "//"]
+  lines: string[], line: number, maxLines = 10, commentPrefixes: string[] = ["#", "//"],
+  braceContinues = true
 ): { startLine: number; endLine: number } {
   const lower = Math.max(0, line - Math.max(0, maxLines - 1));
   const open: Array<{ bracket: string; line: number }> = [];
@@ -31,6 +32,7 @@ export function statementSpan(
         continue;
       }
       code += ch;
+      if (!braceContinues && (ch === "{" || ch === "}")) continue;
       if ("([{".includes(ch)) open.push({ bracket: ch, line: row });
       const closing = ")]}".indexOf(ch);
       if (closing >= 0) {

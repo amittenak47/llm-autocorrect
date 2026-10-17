@@ -11,8 +11,8 @@ describe("tree-sitter syntax checking with real WASM grammars", () => {
       assert.equal(grammarFor(languageId), languageId);
       assert.equal(checker.supports(languageId), true);
     }
-    assert.equal(grammarFor("c"), "cpp");
-    assert.equal(checker.supports("c"), true);
+    assert.equal(grammarFor("c"), undefined);
+    assert.equal(checker.supports("c"), false);
     for (const languageId of ["zig", "plaintext", "typescriptreact", ""]) {
       assert.equal(grammarFor(languageId), undefined);
       assert.equal(checker.supports(languageId), false);
@@ -59,12 +59,11 @@ describe("tree-sitter syntax checking with real WASM grammars", () => {
     assert.ok(errors && errors.length > 0);
   });
 
-  it("loads the remaining grammars and shares the C++ grammar with C", async () => {
+  it("loads the remaining grammars", async () => {
     for (const [languageId, text] of [
       ["java", "class Main { public static void main(String[] args) {} }\n"],
       ["rust", "fn main() {}\n"],
       ["cpp", "int main() { return 0; }\n"],
-      ["c", "int main(void) { return 0; }\n"],
     ]) {
       assert.deepEqual(await checker.errors(languageId, text), [], languageId);
     }
@@ -86,6 +85,10 @@ describe("tree-sitter syntax checking with real WASM grammars", () => {
     assert.ok(invalid && invalid.length > 0);
     assert.deepEqual(valid, []);
     assert.deepEqual(invalidAgain, invalid);
+  });
+
+  it("leaves C, including C-only atomic syntax, to the language server", async () => {
+    assert.equal(await checker.errors("c", "_Atomic(int) counter;"), undefined);
   });
 
   it("returns undefined for unsupported languages", async () => {

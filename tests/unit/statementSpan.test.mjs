@@ -40,3 +40,11 @@ test("span respects the line limit and never expands downward", () => {
 test("brackets inside multiline template strings stay ignored", () => {
   assert.deepEqual(statementSpan(["const s = `(", "still [", "end`;", "next"], 3, 10, ["//"]), span(3, 3));
 });
+
+
+test("block braces do not expand C-family statements but call parentheses do", () => {
+  assert.deepEqual(statementSpan(["function sum(xs) {", "  let total = 0;", "  return totl;"], 2, 10, ["//"], false), span(2, 2));
+  assert.deepEqual(statementSpan(["foo(a,", "    b c);"], 1, 10, ["//"], false), span(0, 1));
+  assert.deepEqual(statementSpan(["function f() {", "  foo(a,", "      b c);"], 2, 10, ["//"], false), span(1, 2));
+  assert.deepEqual(statementSpan(["values = {", '    "a": 1,', '    "b": totl}'], 2, 10, ["#"], true), span(0, 2));
+});

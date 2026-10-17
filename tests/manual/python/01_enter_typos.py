@@ -174,7 +174,7 @@ def character_counts(text):
 # Enter at END of the SECOND call line; line.wholeStatement true sends both.
 # Desired repairs: add comma between 2 and 3 AND close ]. sum(...) is closed.
 # Parser-only may suppress the open bracket as unfinished: try LSP/gate-off or C.
-# Balanced A/B control: append ] yourself, then retry just the missing comma.
+# Balanced A/B control: insert ] immediately before ), then retry just the missing comma.
 def sum_sample():
     # expect: whole call -> result = sum([ then 1, 2, 3]); fix second-line comma and unclosed [
     result = sum([

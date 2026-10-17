@@ -101,3 +101,25 @@ describe("mergeCavemanComments with CRLF", () => {
     assert.equal(mergeCavemanComments("x = 1\r\ny = 2", "x = 3 # changed\ny = 2", python), undefined);
   });
 });
+
+
+describe("inserted documentation blocks cannot swallow code", () => {
+  it("rejects Python code inside an inserted docstring", () => {
+    assert.equal(docsPreservesCode('def f():\n    return 42',
+      'def f():\n    """Doc.\n    return 42\n    """', python), false);
+  });
+
+  it("rejects C-family code inside an inserted block comment", () => {
+    assert.equal(docsPreservesCode("return 42;", "/* Doc.\nreturn 42;\n*/", typescript), false);
+  });
+
+  it("keeps an original multiline docstring and permits an inserted comment", () => {
+    const original = 'def f():\n    """Doc.\n    More.\n    """\n    return 42';
+    assert.equal(docsPreservesCode(original, original.replace("    return 42", "    # Result.\n    return 42"), python), true);
+  });
+
+  it("accepts an inserted docstring closed before the original code", () => {
+    assert.equal(docsPreservesCode('def f():\n    return 42',
+      'def f():\n    """Doc.\n    """\n    return 42', python), true);
+  });
+});

@@ -1,9 +1,12 @@
 // Java DATA: 10 cases; isolate one method in a class Typos wrapper.
 // Enter fix: put the cursor at the END of a broken line and press Enter. The
 // extension checks the line just left. Comment lines and blank lines are skipped.
-// Manual line fix: menu (Ctrl+Shift+;) then C, or the command
+// Manual line fix: menu (Ctrl+Shift+; / Cmd+Shift+; on macOS) then C, or the command
 // "Autocorrect: Correct Line Near Cursor".
 // Output -> "LLM Autocorrect" shows every step (set autocorrect.debug: true).
+// With line.wholeStatement true, ordinary body targets stay on one line:
+// enclosing block braces are not continuations. Check TARGET in
+// [line] prompt (user):; open parentheses/brackets still expand a statement.
 // No Java LSP installed here: parser path only with gate true. Name typos need
 // line.requireDiagnostic false or manual C. Keep the wrapper's closing brace.
 class Typos {
@@ -59,8 +62,10 @@ class Typos {
     }
 
     // UPSTREAM: copy method + wrapper; set line.requireDiagnostic false; Enter
-    // at END of return total;. Expect initial no-op then retrying upstream line
-    // using parser evidence (or direct redirect with an LSP); return unchanged.
+    // at END of return total;. The parser error spans declaration + return, so
+    // expect direct redirect to the declaration before the first LLM call.
+    // Only the declaration is TARGET; enclosing class/method and return stay intact.
+    // With parser off, LSP evidence may redirect or allow a no-op then upstream retry.
     static int subtract(int a, int b) {
         // expect: upstream declaration gains ; after a - b
         int total = a - b

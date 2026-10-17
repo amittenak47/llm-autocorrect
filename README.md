@@ -21,32 +21,36 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-## Features (v0.3.0)
+## Features (v0.4.0)
 
 | Feature | Summary |
 | --- | --- |
-| **Line autocorrect** | On **Enter**, the line you left may be fixed (typos, syntax, wrong-language idioms). Cascade errors (e.g. `return` under broken `def`) redirect to the upstream line. Brief highlight on change. |
+| **Line autocorrect** | On **Enter**, the line you left may be fixed (typos, syntax, wrong-language idioms). Cascade errors (e.g. `return` under broken `def`) redirect to the upstream line, but only to a real syntax error at most 8 lines up. A multi-line statement is sent whole. Brief highlight on change. |
+| **Syntax check** | Built-in tree-sitter parser (Python, JS, TS, Go, Java, Rust, C++) detects syntax errors instantly, even when the language server is quiet; unfinished code (an open bracket) is ignored. |
+| **Safer fixes** | Prompts include the LSP/parser error and names defined in the file. Local checks reject fixes that change string contents, invent names, or rewrite most of a line; an immediate fix that introduces a new nearby error without reducing the error count is undone automatically (queue reviews are excluded). |
+| **Logic suggestions** | **Autocorrect: Check for Logic Bugs** lists likely logic bugs in Problems with an optional quick fix — never applied on its own. |
+| **Privacy** | Sensitive files (`.env`, keys, credentials) are never used; secrets in context and diagnostic messages are redacted; secret-bearing lines are not sent to cloud profiles. |
 | **Granite Guardian judge** | Optional second profile scores fix/paste replies (BYOC yes/no). On `no`, regenerate once; default **`softApply`** still writes the candidate (revert via Remove/Revert at Cursor). Staged **context notes** skip the judge (instruction edits). |
-| **Modal menu** | Double-tap **`Ctrl`** — hotkey-driven workflow without leaving the editor. |
+| **Modal menu** | Double-tap **`Ctrl`** / **`Ctrl+Shift+;`**, or double-tap **`Cmd`** / **`Cmd+Shift+;`** on macOS — hotkey-driven workflow without leaving the editor. |
 | **Immediate fix** | **A** (block) or **C** (line) — send to LLM immediately, no staging. |
 | **Stage Workflow** | **Shift+A** (block) or **Shift+C** (line) → green highlight → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Window** | **S** → W/S (up/down) A/D (start/end) controls to select a block → **E** closes selection window and enters staged mode → set modifiers → **E** send now or **Shift+E** enqueue. |
 | **Stage Modifiers** | Before finalizing the send, add modifiers: defaults to **best-guess fix** · **D** documentation · **F** caveman · **X** custom prompt (instruction) · **1**–**5** context tiers · **M** / **Shift+M** LLM profile. |
 | **Stage Context** | **1** nearby lines (default **indent-scoped**; optional flat `window`) · **2** enclosing signature **chain** (e.g. `class` + `def`, on by default for fix/docs) · **3** recent edit hunks · **4** open-tab signatures · **5** last large **selection** snippet. Tiers **3**–**5** require `context.ringEnabled`. Caveman staging defaults to nearby only. |
-| **Multi-profile LLM** | Named profiles for Groq, Gemini, Anthropic, local Granite (`local`), Guardian (`guardian`), and Ollama. Empty `profiles` uses built-in defaults. Choose with **M** / **Shift+M** before **E** / **Shift+E**. |
+| **Multi-profile LLM** | Named profiles for Groq, Gemini, Anthropic, local Granite (`local`), Guardian (`guardian`), and Ollama. Built-ins live in the extension; `profiles` holds only your overrides by id (plus custom profiles), and `hiddenProfiles` hides built-ins. Choose with **M** / **Shift+M** before **E** / **Shift+E**. |
 | **Reasoning mode** | Per-profile `reasoningMode` only: `off` (default) or `log` (Output only — never applied). No global `llm.reasoningMode`. |
 | **Queue mode** (`queue.mode`) | **Checkpoint review** (`reviewChanges`, default): enqueue runs the LLM; **Q** / **Shift+Q** review **proposed edits** before apply (amber). Checked items apply; **unchecked stay queued**. **Deferred batch** (`deferExecution`, advanced): enqueue stores **tasks** only (blue dotted); **Q** runs selected tasks — LLM + apply. |
 | **Per-profile concurrency** | Each LLM profile has its own async request pool (`maxConcurrent`: default **1** localhost, **2** cloud). Deferred batch and all LLM calls share the limit — not OS threads, but independent in-flight caps per endpoint. |
-| **Region lock** | Overlapping enqueue prompts first (**Replace** / **Expand & merge** / **Revert & continue** / **Cancel**). Queue border color = LLM profile. Applied fixes live in a **revert ledger** until reverted. |
+| **Region lock** | Overlapping enqueue prompts first (**Replace** / **Expand & merge** in deferred mode / **Cancel**). Queue border color = LLM profile. Applied fixes live in a **revert ledger** (tracked through edits) until reverted; a new fix over an earlier one supersedes it. |
 | **Queued staged requests** | **Shift+E** enqueues (behavior depends on `queue.mode`). **Q** = current profile; **Shift+Q** = all profiles. |
 | **Review before apply (Enter)** | `queue.enabled` — Enter still autocorrects; uses the active `queue.mode` (review changes vs defer task). |
 | **Manual-only Enter** | `disableAutocorrect` — no automatic Enter fixes; call the LLM only when you use menu/staged keys. |
-| **LSP or deliberate** | **Automatic:** Enter can require an LSP squiggle first (`line.requireDiagnostic`). **Deliberate:** menu/staged sends on demand (`fix.requireDiagnostic` optional). **Off:** `disableAutocorrect` stops Enter autocorrect entirely. |
+| **LSP or deliberate** | **Automatic:** Enter can require language-server evidence or a built-in parser error (`line.requireDiagnostic`, `syntax.useParser`); the parser covers syntax errors only. **Deliberate:** menu/staged sends on demand (`fix.requireDiagnostic` optional). **Off:** `disableAutocorrect` stops Enter autocorrect entirely. |
 | **Paste-translate** | Paste foreign-language code → offer to translate (never silent replace). Faithfulness check rejects invented programs. |
 | **Local inference** | `openai-compatible` + localhost → **60s** default timeout; **2048** default line `max_tokens`. |
 | **Typing harness** | **Autocorrect: Run Typing Harness** — replay `prepare_plan.py` JSON (LeetCode solutions with typos) to stress-test Enter autocorrect. See `tests/harness/README.md`. |
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (through **v0.3.0**).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (through **v0.4.0**).
 
 You bring your own API key. Keys live in the editor's secret storage, not in settings files.
 
@@ -54,7 +58,7 @@ You bring your own API key. Keys live in the editor's secret storage, not in set
 
 ## Syntax check
 
-The extension parses the file itself with tree-sitter for Python, JavaScript, TypeScript, Go, Java, Rust, and C/C++, so Enter fixes work even when the language server has not reported yet. Zig still relies on the language server. Set `autocorrect.syntax.useParser` to `false` to disable parser checks (default: `true`).
+The extension parses the file itself with tree-sitter for Python, JavaScript, TypeScript, Go, Java, Rust, and C++, so Enter fixes work even when the language server has not reported yet. C and Zig rely on the language server; C++ keeps the parser. Set `autocorrect.syntax.useParser` to `false` to disable parser checks (default: `true`).
 
 ## Quick start
 
@@ -73,10 +77,10 @@ The extension parses the file itself with tree-sitter for Python, JavaScript, Ty
 
 | Action | Keys |
 | --- | --- |
-| Enter menu mode | Double-tap **`Ctrl`** |
+| Enter menu mode | Double-tap **`Ctrl`** / **`Ctrl+Shift+;`**, or double-tap **`Cmd`** / **`Cmd+Shift+;`** on macOS |
 | Exit menu (no staged block) | **`Esc`** |
 
-While in menu, staged, or capture mode, the status bar shows a **persistent** key cheat sheet (until **Esc**). If letter keys seem ignored, open the menu first (`Ctrl+Shift+;` or double-tap **Ctrl**), or click the Autocorrect status item for the command menu.
+While in menu, staged, or capture mode, the status bar shows a **persistent** key cheat sheet (until **Esc**). If letter keys seem ignored, open the menu first (double-tap **Ctrl** / `Ctrl+Shift+;`, or double-tap **Cmd** / `Cmd+Shift+;` on macOS), or click the Autocorrect status item for the command menu.
 
 ---
 
@@ -160,14 +164,14 @@ Each tutorial assumes you opened the menu unless noted.
 1. Enable `autocorrect.line.enabled` (default on).
 2. Type a line with a typo, e.g. `pritn("hi")`.
 3. Press **Enter** on the next line.
-4. After a short debounce, if the LSP reports an error on the previous line, the extension calls the LLM and may replace that line (brief highlight).
+4. After a short debounce, if the language server reports an error/warning or the built-in parser (`syntax.useParser`) finds a syntax error on the previous line, the extension calls the LLM and may replace that line (brief highlight).
 
 **Tips**
 
-- Default `line.requireDiagnostic: true` — no squiggle, no API call (saves tokens on VS Code + Pylance).
+- Default `line.requireDiagnostic: true` — a call needs evidence from the language server OR the built-in parser (`syntax.useParser`); the parser covers syntax errors only.
 - On **Cursor**, first launch may offer **Use Cursor defaults** → sets `line.requireDiagnostic` to `false` once (Anysphere diagnostics are often quiet). Decline if **Problems** already shows reliable squiggles.
-- Set `line.requireDiagnostic: false` manually to fix on Enter even without LSP errors. **Token cost:** every Enter on a non-blank line can trigger an LLM call after debounce, even when the line is already fine (you still pay for the prompt; the extension skips apply if the model returns the same text).
-- When Enter skips for no LSP error, the **status bar** explains why (not only the Output channel).
+- Set `line.requireDiagnostic: false` manually to fix on Enter even without language-server or parser evidence. **Token cost:** every Enter on a non-blank line can trigger an LLM call after debounce, even when the line is already fine (you still pay for the prompt; the extension skips apply if the model returns the same text).
+- When Enter skips for lack of language-server or parser evidence, the **status bar** explains why (not only the Output channel).
 - Want Enter fixes to **queue** instead of applying right away? See tutorial **15** — Enter queue mode (`queue.enabled` + `queue.mode`).
 - Want to **stop Enter fixes entirely** and only call the LLM when you ask? See tutorial **16** (`disableAutocorrect`).
 
@@ -343,7 +347,7 @@ Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extend
 }
 ```
 
-Built-in profiles live in the extension: `groq`, `gemini`, `anthropic`, `local` (Granite 4.1), `guardian`, `ollama`. `autocorrect.profiles` defaults to `[]`; entries override built-ins by `id`, inheriting omitted fields, or add custom profiles when they have a new `id` and `provider`. Built-in updates therefore arrive automatically. A one-time migration removes unchanged seeded copies from User settings and keeps only your overrides. `autocorrect.hiddenProfiles` (default `[]`) hides profile ids; hiding every profile restores the built-ins.
+Built-in profiles live in the extension: `groq`, `gemini`, `anthropic`, `local` (Granite 4.1), `guardian`, `ollama`. `autocorrect.profiles` defaults to `[]`; entries override built-ins by `id`, inheriting omitted fields, or add custom profiles when they have a new `id` and `provider`. Built-in updates therefore arrive automatically. A one-time upgrade migration removes unchanged copies saved by older releases and keeps only your overrides. `autocorrect.hiddenProfiles` (default `[]`) hides profile ids; hiding every profile restores the built-ins.
 
 For example, in **User** settings:
 
@@ -373,7 +377,7 @@ Set API key per cloud profile: **Autocorrect: Set API Key**. Localhost needs no 
 llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080
 ```
 
-Use an **instruct/chat** model via `/v1/chat/completions`. Timeout defaults to **60s** on localhost when `timeoutMs` is `0`. Line fixes default to **2048** `max_tokens` on localhost (override with `maxTokensLine`).
+Use an **instruct/chat** model via `/v1/chat/completions`. For profiles without their own timeout, `autocorrect.timeoutMs: 0` defaults to **60s** on localhost. Every built-in profile sets its own `timeoutMs`, which wins over global `autocorrect.timeoutMs`. To change a built-in timeout, add an override such as `{ "id": "local", "timeoutMs": 120000 }` to `autocorrect.profiles`. Line fixes default to **2048** `max_tokens` on localhost (override with `maxTokensLine`).
 
 #### Recommended local setup (Granite 4.1 + Guardian LoRA)
 
@@ -562,22 +566,30 @@ Palette: **`Autocorrect: Translate Selection`**.
 
 ### 19. Command palette & slash menu
 
-**Command Palette** — user-facing commands only (internal hotkey commands are hidden).
+**Command Palette** — user-facing commands only (internal hotkey commands are hidden). Commands marked "(internal)" are keybinding targets and are not meant to be run from the palette.
 
 | Command | Effect |
 | --- | --- |
-| Enter Menu Mode | Same as double-tap **`Ctrl`** |
-| Correct Line Near Cursor | Immediate line fix |
-| Correct Selected Block | Immediate block fix |
-| Add Docstrings / Comments | Docs on selection / staged |
-| Caveman Comments | Caveman on selection / staged |
-| Review Queued Fixes | All profiles |
-| Apply All Queued Fixes | Apply entire queue |
-| Clear Queued Fixes | Empty queue |
-| Run Typing Harness | Replay `prepare_plan.py` JSON for Enter autocorrect stress tests |
-| Toggle Review Before Apply Mode | Enter fixes → review before apply |
-| Set API Key | Per profile |
-| Command Menu (QuickPick) | `/menu`, `/block`, `/line`, etc. |
+| Autocorrect: Check for Logic Bugs | Review code for logic suggestions |
+| Autocorrect: Clear Logic Suggestions | Clear logic suggestions |
+| Autocorrect: Toggle On/Off | Toggle the master switch |
+| Autocorrect: Status Bar Click | Toggle on/off or open the command menu in a mode |
+| Autocorrect: Set API Key | Per profile |
+| Autocorrect: Enter Menu Mode | Double-tap **Ctrl** / `Ctrl+Shift+;`, or double-tap **Cmd** / `Cmd+Shift+;` on macOS |
+| Autocorrect: Review Queued Fixes | All profiles |
+| Autocorrect: Apply All Queued Fixes | Apply all checkpoint edits (deferred tasks excluded) |
+| Autocorrect: Clear Queued Fixes | Empty queue |
+| Autocorrect: Remove or Revert Queued Change at Cursor | Drop a queued item or revert the matching applied fix |
+| Autocorrect: Toggle Review Before Apply Mode | Enter fixes → review before apply |
+| Autocorrect: Toggle Enter Autocorrect Off | Toggle automatic Enter fixes |
+| Autocorrect: Run Typing Harness | Replay `prepare_plan.py` JSON for Enter autocorrect stress tests |
+| Autocorrect: Correct Line Near Cursor | Immediate line fix |
+| Autocorrect: Correct Selected Block | Immediate block fix |
+| Autocorrect: Add Docstrings / Comments | Docs on selection / staged |
+| Autocorrect: Caveman Comments | Caveman on selection / staged |
+| Autocorrect: Translate Selection | Translate selected code to the file language |
+| Autocorrect: Command Menu (QuickPick) | `/menu`, `/block`, `/line`, etc. |
+| Autocorrect: Exit Menu Mode | Exit the menu and clear staging |
 
 ---
 
@@ -645,7 +657,7 @@ Requests send the target line or block (or source snippet for translation) to th
 
 Matching files are excluded from correction and translation, selection capture, recent edit capture and open-tab context. Paths are matched case-insensitively, including Windows paths.
 
-`autocorrect.privacy.redactSecrets` defaults to `true`. It replaces recognized private-key blocks, API tokens, JWTs and quoted secret assignments with `«redacted»` in supplementary context before compression and budgeting. The target itself is preserved for correction or translation.
+`autocorrect.privacy.redactSecrets` defaults to `true`. It replaces recognized private-key blocks, API tokens, JWTs and quoted secret assignments with `«redacted»` in supplementary context before compression and budgeting, and in every diagnostic message before prompt formatting. The target itself is preserved for correction or translation.
 
 `autocorrect.privacy.skipSecretTargetsForCloud` defaults to `true`: targets containing recognized secrets are skipped for cloud profiles. A profile is local only when its provider is `openai-compatible` and its URL is recognized as local (for example localhost or a loopback address). A cloud Guardian judge is also skipped for a secret-bearing original, accepting the candidate. Both privacy settings are machine-scoped. Detection uses patterns and cannot identify every possible secret.
 
@@ -661,34 +673,47 @@ Endpoint settings (`autocorrect.profiles`, legacy `provider` / `model` / `baseUr
 | `autocorrect.disableAutocorrect` | `false` | Stop automatic Enter line fixes; fix on demand only (tutorial 16) |
 | `autocorrect.profiles` | `[]` | Override built-ins by id or add custom endpoints in **User** settings (tutorial 11). |
 | `autocorrect.hiddenProfiles` | `[]` | Profile ids to hide (machine-scoped). |
-| `autocorrect.activeProfile` | `groq` | Active profile id |
+| `autocorrect.activeProfile` | `"groq"` | Active profile id |
 | `autocorrect.guardian.enabled` | `false` | Score fix/paste replies with Granite Guardian before apply |
-| `autocorrect.guardian.profileId` | `guardian` | Judge profile (default `:8081`) |
+| `autocorrect.guardian.profileId` | `"guardian"` | Judge profile (default `:8081`) |
 | `autocorrect.guardian.maxRetries` | `1` | Extra fixer regenerations after Guardian `no` |
 | `autocorrect.apply.verifyAfterApply` | `true` | Re-check immediate fixes; undo new errors when the error count does not decrease. Queue review is excluded. |
 | `autocorrect.apply.verifyWaitMs` | `2000` | Maximum wait for updated diagnostics after a fix (ms). |
-| `autocorrect.apply.onReject` | `softApply` | After final reject: `softApply` (apply + revert) or `skip` (log only) |
-| `autocorrect.provider` | `groq` | **Legacy** — only if `profiles` is empty |
+| `autocorrect.apply.onReject` | `"softApply"` | After final reject: `softApply` (apply + revert) or `skip` (log only) |
+| `autocorrect.provider` | `"groq"` | **Legacy** — only if `profiles` is empty |
 | `autocorrect.model` | `""` | **Legacy** model id |
 | `autocorrect.baseUrl` | `""` | **Legacy** openai-compatible URL |
 | `autocorrect.languages` | `["python"]` | Active language IDs |
 | `autocorrect.prompt.prefix` | `""` | Global context on every request (tutorial 17) |
 | `autocorrect.line.enabled` | `true` | Enter-triggered line fixes |
-| `autocorrect.line.requireDiagnostic` | `true` | **Automatic (Enter):** require LSP error before LLM |
-| `autocorrect.fix.requireDiagnostic` | `false` | **Deliberate (menu/staged):** require LSP error before LLM |
+| `autocorrect.line.requireDiagnostic` | `true` | **Automatic (Enter):** need language-server evidence OR a built-in parser (`syntax.useParser`) error; parser covers syntax only. |
+| `autocorrect.fix.requireDiagnostic` | `false` | **Deliberate (menu/staged):** when true, need language-server evidence OR a built-in parser (`syntax.useParser`) error; parser covers syntax only. |
 | `autocorrect.line.contextLines` | `10` | Tier 1: max lines above (within nearby mode) |
 | `autocorrect.line.contextLinesBelow` | `2` | Tier 1: lines below target |
 | `autocorrect.line.maxLineChars` | `200` | Max chars per context line |
 | `autocorrect.context.tokenBudget` | `0` | Hard context cap (`0` = profile policy) |
 | `autocorrect.context.ringEnabled` | `false` | Enable tiers 3–5 |
-| `autocorrect.context.nearbyMode` | `indentScope` | `indentScope` \| `window` |
-| `autocorrect.context.signatureDepth` | `chain` | `chain` \| `header` |
-| `autocorrect.context.defaultTiers` | nearby + signature | Default tier modifiers in staged mode |
-| `autocorrect.timeoutMs` | `0` | `0` = auto (**5s** cloud, **60s** localhost) |
+| `autocorrect.context.nearbyMode` | `"indentScope"` | `indentScope` \| `window` |
+| `autocorrect.context.signatureDepth` | `"chain"` | `chain` \| `header` |
+| `autocorrect.context.defaultTiers` | `{"nearby": true, "signature": true, "recentEdits": false, "openTabs": false, "yank": false}` | Default tier modifiers in staged mode |
+| `autocorrect.timeoutMs` | `0` | Global timeout fallback; `0` = auto (**5s** cloud, **60s** localhost). Every built-in sets its own `timeoutMs`, which takes precedence. |
 | `autocorrect.line.debounceMs` | `800` | Delay after Enter before check |
-| `autocorrect.queue.mode` | `reviewChanges` | Checkpoint review (default) vs deferred batch (advanced). Unchecked stay queued. |
+| `autocorrect.queue.mode` | `"reviewChanges"` | Checkpoint review (default) vs deferred batch (advanced). Unchecked stay queued. |
 | `autocorrect.queue.enabled` | `false` | Enter queues instead of applying; uses `queue.mode` (tutorial 15) |
-| `autocorrect.debug` | `false` | Verbose scheduling / skip logs (does not dump reasoning unless `reasoningMode` is `log`) |
+| `autocorrect.debug` | `false` | Scheduling/skip logs and system/user prompts (3000 chars each, may contain code); reasoning requires profile `reasoningMode: "log"`. |
+| `autocorrect.paste.enabled` | `true` | Offer to translate pasted code from another language. |
+| `autocorrect.syntax.useParser` | `true` | Use built-in syntax-error evidence alongside the language server; C relies on the language server. |
+| `autocorrect.prompt.includeDiagnostics` | `true` | Include language-server and parser messages in correction prompts. |
+| `autocorrect.prompt.includeNames` | `true` | Include names defined in the file in fix prompts. |
+| `autocorrect.prompt.examples` | `true` | Include five examples in line fixes only. |
+| `autocorrect.line.wholeStatement` | `true` | Expand targets across open parentheses/brackets or backslash continuations; braces expand only in Python. |
+| `autocorrect.logic.profileId` | `""` | Logic-review profile; empty uses the active profile. |
+| `autocorrect.logic.maxIssues` | `5` | Maximum logic suggestions per review. |
+| `autocorrect.fix.localChecks` | `true` | Check string contents, identifiers, and change size before applying fixes. |
+| `autocorrect.context.excludeGlobs` | `["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/*.p12", "**/*.pfx", "**/secrets.*", "**/*secret*.json", "**/credentials*", "**/.aws/**", "**/.ssh/**", "**/.npmrc", "**/.pypirc", "**/*.kdbx"]` | Exclude matching files from targets and context (machine-scoped). |
+| `autocorrect.privacy.redactSecrets` | `true` | Redact recognized secrets from context and diagnostic messages. |
+| `autocorrect.privacy.skipSecretTargetsForCloud` | `true` | Skip secret-bearing targets for cloud profiles, including Guardian. |
+| `autocorrect.line.diagnosticWaitMs` | `1500` | Wait for language-server evidence before skipping Enter (ms); parser syntax evidence can pass immediately. |
 
 **Profile object fields** (inside `autocorrect.profiles`): `id`, `label`, `provider`, `model`, `baseUrl`, `contextPolicy`, `timeoutMs`, `maxConcurrent`, `reasoningMode`, `reasoningEffort`, `maxTokensLine`, `maxTokensBlock`, `color`.
 
@@ -762,20 +787,20 @@ Add language ID to `autocorrect.languages` and install the language server (rust
 
 ## Troubleshooting
 
-Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrect** for skip reasons, diagnostic-gate timing, and LLM call logs.
+Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrect** for skip reasons, diagnostic-gate timing, and LLM call logs. Debug mode also logs system/user prompts (up to 3000 characters each), including code: `[line] prompt (system):`, `[line] prompt (user):`, `[staged] prompt (system):`, and `[staged] prompt (user):`.
 
 ### Enter / line autocorrect
 
 | Problem | What to check |
 | --- | --- |
 | **Nothing on Enter** | File must be a real source doc (`.py`, not Output/Settings). Language ID must be in `autocorrect.languages` (default: `python` only). Master switch on (status bar sparkle, not slash). `autocorrect.disableAutocorrect` must be **false** (tutorial 16). `autocorrect.line.enabled` must be **true**. Wait ~`line.debounceMs` (default 800ms) after Enter. Blank and comment-only lines are skipped. |
-| **Log says `no LSP squiggle` / status bar skip** | With default `line.requireDiagnostic: true`, Enter only calls the LLM when the language server reports an error/warning on that line. Fix LSP setup (**View → Problems**), or set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor, accept the first-run prompt or see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
-| **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
+| **Log says `no LSP squiggle` / status bar skip** | With default `line.requireDiagnostic: true`, a call needs language-server evidence OR a built-in parser (`syntax.useParser`) syntax error on that line. The parser covers syntax errors only. Fix LSP setup (**View → Problems**), or set `line.requireDiagnostic: false` (higher token use — tutorial 1). On Cursor, accept the first-run prompt or see [Language server setup](#language-server-setup-vs-code-vs-cursor). |
+| **Manual C works, Enter doesn't** | **Automatic** Enter uses `line.requireDiagnostic`; deliberate **C** uses `fix.requireDiagnostic` (default off). If LSP is slow, increase `autocorrect.line.diagnosticWaitMs` (default 1500ms). Or set `line.requireDiagnostic: false`. |
 | **`already correct` / no edit** | Model returned the same line or `UNCHANGED`. Normal — no apply, but you may still have paid for the prompt. |
 | **`whitespace-only diff` / indent no-op** | Model echoed the target without indent. v0.2.3 reattaches buffer indent and retries the previous line when cascade/root diagnostics point upstream. |
-| **`empty content — reasoning consumed tokens`** | Reasoning model burned the output budget. Set profile `reasoningMode: "off"`, raise `maxTokensLine` (localhost default 2048), and confirm Output shows `v0.3.0`. |
+| **`empty content — reasoning consumed tokens`** | Reasoning model burned the output budget. Set profile `reasoningMode: "off"`, raise `maxTokensLine` (localhost default 2048), and confirm Output shows `v0.4.0`. |
 | **Wrong profile / `default` in logs** | Remove legacy `autocorrect.provider` / `baseUrl` / `model` when using `profiles`. Activation should list your profile ids. |
-| **Range locked on enqueue** | Overlapping enqueue shows a modal: **Replace**, **Expand & merge** (same profile), **Revert & continue** (if an applied fix overlaps), or **Cancel**. |
+| **Range locked on enqueue** | Overlapping queued items offer **Replace** or **Cancel**. **Expand & merge** is offered only in deferred mode (`queue.mode: deferExecution`) for the same profile. A new fix over an earlier applied fix supersedes it. |
 | **Remove / revert at cursor** | Command Palette → **Remove or Revert Queued Change at Cursor** — drops a queued item, or reverts a ledger entry if the buffer still matches. |
 | **Enter does nothing at all (no log)** | Likely `disableAutocorrect: true` or `line.enabled: false`. Status bar shows `(manual)` when Enter autocorrect is off. |
 
@@ -783,8 +808,8 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 
 | Problem | What to check |
 | --- | --- |
-| **Menu keys ignored** | Open the menu first (double-tap **Ctrl** or `Ctrl+Shift+;`). Keys only work in menu, staged, or capture mode. The status bar keeps a key hint until **Esc**. Click Autocorrect in a mode for the command menu. |
-| **Staged send skipped** | Deliberate gate: `fix.requireDiagnostic: true` requires an LSP squiggle on the block. Default **false** — sends anytime. |
+| **Menu keys ignored** | Open the menu first (double-tap **Ctrl** / `Ctrl+Shift+;`, or double-tap **Cmd** / `Cmd+Shift+;` on macOS). Keys only work in menu, staged, or capture mode. The status bar keeps a key hint until **Esc**. Click Autocorrect in a mode for the command menu. |
+| **Staged send skipped** | Deliberate gate: `fix.requireDiagnostic: true` requires language-server evidence OR a built-in parser (`syntax.useParser`) syntax error in the block; the parser covers syntax errors only. Default **false** — sends anytime. |
 | **`buffer changed — skipped`** | File was edited while the LLM was running. Re-stage and send again. |
 | **Paid call but nothing applied** | Status bar shows the reason. Output has the model text for docs/caveman rejects; use **Copy** / **Force apply** when offered. |
 | **`select a block for A`** | **A** needs a non-empty selection. Use **Shift+A** to stage without immediate send, or **S** Staged Window. |
@@ -797,7 +822,7 @@ Enable `"autocorrect.debug": true` and open **View → Output → LLM Autocorrec
 | **Queue wrong profile** | Profile is chosen during modifiers (**M** / **Shift+M**) before **Shift+E**. **Q** shows the **current** profile's queue only; **Shift+Q** shows all. |
 | **Queue empty after review** | Unchecked items **stay queued**. Use **Clear Queued Fixes** to drop them. **Esc** cancels without changing the queue. |
 | **`413` / token limit (Groq)** | Prompt too large. Disable tiers **3–5**; turn off **1**/**2** if needed; smaller selection; `contextPolicy: minimal`; lower `context.tokenBudget`. |
-| **LLM timeout / hung** | Cloud default ~5s; localhost `openai-compatible` default **60s**. Raise profile `timeoutMs` or `autocorrect.timeoutMs`. Confirm llama-server/Ollama is running and `baseUrl` ends with `/v1`. |
+| **LLM timeout / hung** | Every built-in profile sets `timeoutMs`, which wins over global `autocorrect.timeoutMs`. Add an override such as `{ "id": "local", "timeoutMs": 120000 }` to `autocorrect.profiles`. Profiles without a timeout use the global value (`0`: ~5s cloud / **60s** localhost). Confirm llama-server/Ollama is running and `baseUrl` ends with `/v1`. |
 | **API key / auth errors** | Command Palette → **Set API Key** per profile. Keys live in secret storage, not `settings.json`. |
 | **F5 Extension Development Host** | API keys and settings are per-window — set the key again in the **Extension Development Host**, not only the outer IDE. |
 

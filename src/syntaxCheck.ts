@@ -60,8 +60,6 @@ export function grammarFor(languageId: string): string | undefined {
     case "rust":
     case "cpp":
       return languageId;
-    case "c":
-      return "cpp";
     default:
       return undefined;
   }
