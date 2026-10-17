@@ -82,3 +82,26 @@ describe("caveman merge", () => {
     assert.equal(normalizeModelText("Here:\n```\na=1\n```"), "a=1");
   });
 });
+
+describe("indented replies and context markers", () => {
+  it("preserves first-line spaces and tabs in unfenced replies", () => {
+    assert.equal(stripFences("    x = 1\n    y = 2"), "    x = 1\n    y = 2");
+    assert.equal(stripFences(" \t\r\n\tfoo()\r\n\tbar()  \r\n"), "\tfoo()\r\n\tbar()");
+  });
+
+  it("preserves indentation in full and prose-wrapped fenced replies", () => {
+    assert.equal(stripFences("```py\n    x = 1\n    y = 2\n```\n"), "    x = 1\n    y = 2");
+    assert.equal(stripFences("Sure:\n```py\n    x = 1\n    y = 2\n```\n"), "    x = 1\n    y = 2");
+    assert.equal(normalizeModelText("```py\r\n\tx = 1\r\n```"), "\tx = 1");
+  });
+
+  it("places the target marker between above and below lines in both modes", () => {
+    const lines = ["def f():", "    a = 1", "    b = 2", "    c = 3", "    d = 4"];
+    const expected = "def f():\n    a = 1\n>>> TARGET LINE <<<\n    c = 3\n    d = 4";
+    for (const mode of ["indentScope", "window"]) {
+      assert.equal(collectNearbyLines(lines, 2, 2, 10, 2, mode, ">>> TARGET LINE <<<"), expected);
+      assert.equal(collectNearbyLines(lines, 2, 2, 10, 2, mode), expected.replace(">>> TARGET LINE <<<\n", ""));
+      assert.equal(collectNearbyLines(lines, 1, 3, 10, 2, mode, ">>> CODE BLOCK <<<"), "def f():\n>>> CODE BLOCK <<<\n    d = 4");
+    }
+  });
+});

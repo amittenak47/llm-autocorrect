@@ -26,7 +26,8 @@ export function collectNearbyLines(
   endLine: number,
   maxAbove: number,
   maxBelow: number,
-  mode: NearbyMode
+  mode: NearbyMode,
+  marker?: string
 ): string {
   if (mode === "window") {
     const above: string[] = [];
@@ -38,7 +39,7 @@ export function collectNearbyLines(
     for (let i = endLine + 1; i <= Math.min(lines.length - 1, endLine + maxBelow); i++) {
       below.push(lines[i] ?? "");
     }
-    return [...above, ...below].join("\n");
+    return [...above, ...(marker !== undefined ? [marker] : []), ...below].join("\n");
   }
 
   const targetIndent = indentWidth(lines[startLine] ?? "");
@@ -77,7 +78,7 @@ export function collectNearbyLines(
     below.push(line);
   }
 
-  return [...above, ...below].join("\n");
+  return [...above, ...(marker !== undefined ? [marker] : []), ...below].join("\n");
 }
 
 /** Enclosing signature header or chain (class + def), scanning up from line. */

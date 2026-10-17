@@ -89,11 +89,6 @@ export class StatusBar implements vscode.Disposable {
     this.refresh();
   }
 
-  /** @deprecated use setQueueSummary */
-  setQueueCount(n: number): void {
-    this.setQueueSummary(n, new Map());
-  }
-
   async withBusy<T>(op: () => Promise<T>): Promise<T> {
     this.busyCount++;
     this.refresh();

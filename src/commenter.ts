@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { BlockCapture } from "./blockCapture";
+import { selectionLineSpan } from "./blockMath";
 import { blockLineRange } from "./blockApply";
 import { activeLlmProfile, cfg } from "./config";
 import { PROFILES } from "./languages";
@@ -30,7 +31,8 @@ export class Commenter {
     if (!editor.selection.isEmpty) {
       const doc = editor.document;
       const r = editor.selection;
-      return blockLineRange(doc, r.start.line, r.end.line);
+      const span = selectionLineSpan(r.start.line, r.end.line, r.end.character);
+      return blockLineRange(doc, span.startLine, span.endLine);
     }
     const doc = editor.document;
     let line = editor.selection.active.line - 1;

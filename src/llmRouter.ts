@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { shouldSkipSecretTarget } from "./privacySettings";
+import { anySignal } from "./abortSignals";
 import { activeLlmProfile, cfg } from "./config";
 import {
   buildGuardianJudgeUserMessage,
@@ -61,7 +63,7 @@ export class LlmRouter {
     const profile = req.profileId
       ? this.profileById(req.profileId) ?? this.activeProfile
       : this.activeProfile;
-    return this.concurrency.run(profile.id, () => this.completeWithOptionalJudge(profile, req));
+    return this.completeWithOptionalJudge(profile, req);
   }
 
   private async completeWithOptionalJudge(
@@ -83,7 +85,7 @@ export class LlmRouter {
         attempt > 1
           ? `${req.user}\n\n(Previous reply was rejected as unfaithful — reply with ONLY a minimal correction of the TARGET/SOURCE.)`
           : req.user;
-      last = await this.completeForProfile(profile, { ...req, user });
+      last = await this.concurrency.run(profile.id, () => this.completeForProfile(profile, { ...req, user }));
 
       if (!judgeOn) {
         return last;
@@ -122,9 +124,13 @@ export class LlmRouter {
       );
       return "yes";
     }
+    if (shouldSkipSecretTarget(original, gProfile, c.skipSecretTargetsForCloud)) {
+      this.output?.appendLine("[guardian] skipped cloud judge: original contains a secret — accepting candidate");
+      return "yes";
+    }
     const user = buildGuardianJudgeUserMessage({ original, candidate });
     const timeoutMs = this.resolveTimeout(gProfile);
-    const gSignal = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+    const gSignal = anySignal([signal, AbortSignal.timeout(timeoutMs)]);
     try {
       const raw = await this.concurrency.run(gProfile.id, () =>
         this.client.completeForProfile(gProfile, {
@@ -146,7 +152,7 @@ export class LlmRouter {
 
   private async completeForProfile(profile: LlmProfileConfig, req: RoutedRequest): Promise<string> {
     const timeoutMs = this.resolveTimeout(profile);
-    const signal = AbortSignal.any([req.signal, AbortSignal.timeout(timeoutMs)]);
+    const signal = anySignal([req.signal, AbortSignal.timeout(timeoutMs)]);
     const maxTokens = capMaxTokens(profile.provider, req.maxTokens, req.system, req.user);
     return this.client.completeForProfile(profile, { ...req, maxTokens, signal });
   }

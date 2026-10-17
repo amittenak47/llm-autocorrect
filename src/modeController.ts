@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { activeLlmProfile, cfg, setActiveProfile } from "./config";
 import { ContextAssemblerService } from "./contextAssembler";
+import { selectionLineSpan } from "./blockMath";
 import { BlockCapture } from "./blockCapture";
 import { FixQueue } from "./fixQueue";
 import { LlmRouter } from "./llmRouter";
@@ -111,9 +112,11 @@ export class ModeController implements vscode.Disposable {
       vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
       return;
     }
+    const selection = editor.selection;
+    const span = selectionLineSpan(selection.start.line, selection.end.line, selection.end.character);
     const range =
       this.blockCapture.getStagedRange(editor) ??
-      (editor.selection.isEmpty ? undefined : editor.selection);
+      (selection.isEmpty ? undefined : new vscode.Range(span.startLine, 0, span.endLine, 0));
     if (!range) {
       vscode.window.setStatusBarMessage("Autocorrect: select a block for A", 3000);
       return;

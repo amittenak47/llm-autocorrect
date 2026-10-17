@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { skipExcludedDocument, skipSecretTarget } from "./privacy";
 import { blockLineRange } from "./blockApply";
 import { blockMaxTokens } from "./blockMath";
 import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
@@ -7,22 +8,29 @@ import {
   ContextAssemblerService,
   formatBlockWithContext,
 } from "./contextAssembler";
+import { formatDiagnosticsForBlock } from "./diagPrompt";
+import { builtinNames, definedNames } from "./fileNames";
+import { checkFix } from "./fixChecks";
 import { shouldFixRange } from "./diagnosticGate";
 import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
-import { isCommentOrBlank, LanguageProfile, PROFILES } from "./languages";
+import { LanguageProfile, PROFILES } from "./languages";
 import { LlmRouter } from "./llmRouter";
 import { GuardianRejectedError } from "./guardianJudge";
 import { offerRejectRecovery, reportOutcome } from "./outcomes";
 import { blockFixUserMessage } from "./promptContext";
 import {
   alignToLineCount,
+  docsPreservesCode,
   isUnchanged,
   mergeCavemanComments,
   normalizeModelText,
+  preserveLeadingIndent,
 } from "./responseIngress";
 import { StagedAttributes, StagedOp } from "./stagedSession";
 import { StatusBar } from "./statusBar";
+import { ApplyVerifier, snapshotDiagnostics, snapshotParserDiagnostics } from "./applyVerifier";
+import { SyntaxChecker } from "./syntaxCheck";
 
 export interface ExecuteResult {
   ok: boolean;
@@ -30,21 +38,28 @@ export interface ExecuteResult {
 }
 
 export class StagedExecutor {
+  private readonly verifier: ApplyVerifier;
+
   constructor(
     private readonly router: LlmRouter,
     private readonly contextAsm: ContextAssemblerService,
     private readonly queue: FixQueue,
     private readonly statusBar: StatusBar,
     private readonly flash: Flash,
-    private readonly output: vscode.OutputChannel
-  ) {}
+    private readonly output: vscode.OutputChannel,
+    private readonly syntaxChecker: SyntaxChecker
+  ) {
+    this.verifier = new ApplyVerifier(queue, output, syntaxChecker);
+  }
 
   async run(
     editor: vscode.TextEditor,
     range: vscode.Range,
     attrs: StagedAttributes,
-    queue: boolean
+    queue: boolean,
+    fromQueue = false
   ): Promise<ExecuteResult> {
+    if (skipExcludedDocument(editor.document)) return { ok: false };
     const langProfile = PROFILES[editor.document.languageId];
     if (!langProfile || !cfg().languages.includes(editor.document.languageId)) {
       reportOutcome(`unsupported language "${editor.document.languageId}"`, {
@@ -59,6 +74,7 @@ export class StagedExecutor {
     const doc = editor.document;
     const blockRange = blockLineRange(doc, range.start.line, range.end.line);
     const text = doc.getText(blockRange);
+    const textLf = text.replace(/\r\n/g, "\n");
     if (text.trim().length === 0) {
       reportOutcome("staged block is empty", {
         kind: "skip",
@@ -71,6 +87,7 @@ export class StagedExecutor {
 
     const llmProfile =
       this.router.profileById(attrs.profileId) ?? this.router.activeProfile;
+    if (skipSecretTarget(textLf, llmProfile)) return { ok: false };
     const queueLabel = `${attrs.op} ${blockRange.start.line + 1}-${blockRange.end.line + 1} · ${attrs.contextNote || "no ctx"}`;
 
     if (queue && isDeferQueueMode()) {
@@ -98,7 +115,10 @@ export class StagedExecutor {
       return { ok: true, queued: true };
     }
 
-    if (!shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output)) {
+    const parserErrors = cfg().syntaxUseParser && this.syntaxChecker.supports(doc.languageId)
+      ? await this.syntaxChecker.errors(doc.languageId, doc.getText()) : undefined;
+    if (!shouldFixRange(doc.uri, blockRange.start.line, blockRange.end.line, this.output,
+      parserErrors?.map((error) => error.line))) {
       reportOutcome("no LSP error in block — skipped (fix.requireDiagnostic)", {
         kind: "skip",
         output: this.output,
@@ -109,10 +129,27 @@ export class StagedExecutor {
     }
 
     const assembled = this.contextAsm.assembleBlock(editor, blockRange, attrs.tiers, llmProfile);
-    const codePayload = formatBlockWithContext(text, assembled.supplementary);
-    const userMsg = blockFixUserMessage(codePayload, attrs.contextNote);
+    const codePayload = formatBlockWithContext(textLf, assembled.supplementary);
+    const c = cfg();
+    const plainFix = attrs.op === "fix" && !attrs.contextNote?.trim();
+    const names = plainFix && (c.promptIncludeNames || c.fixLocalChecks)
+      ? definedNames(doc.getText().split(/\r?\n/), doc.languageId, blockRange.start.line, Number.MAX_SAFE_INTEGER) : [];
+    const lspDiags = snapshotDiagnostics(doc.uri);
+    const parserDiags = (parserErrors ?? []).filter((error) => !lspDiags.some((d) => d.severity === 0 &&
+      d.startLine <= error.line && error.line <= d.endLine)).map((error) => ({
+      line: error.line, character: error.column, message: error.message, severity: 0,
+    }));
+    const diagnostics = c.promptIncludeDiagnostics ? formatDiagnosticsForBlock(
+      blockRange.start.line, blockRange.end.line, [
+        ...vscode.languages.getDiagnostics(doc.uri).map((d) => ({
+          line: d.range.start.line, character: d.range.start.character, message: d.message, severity: d.severity,
+        })),
+        ...parserDiags,
+      ]) : "";
+    const userMsg = blockFixUserMessage(codePayload, attrs.contextNote, diagnostics,
+      plainFix && c.promptIncludeNames ? names.slice(0, 60) : undefined);
 
-    const lines = blockRange.end.line - blockRange.start.line + 1;
+    const lines = textLf.split("\n").length;
     const tierStr = attrs.tiers.nearby ? "" : " · minimal ctx";
     reportOutcome(
       `${queue ? "queuing" : "sending"} ${lines}L [${llmProfile.label}]${tierStr} (~${assembled.estimatedTokens} tok)…`,
@@ -126,18 +163,19 @@ export class StagedExecutor {
     );
 
     let response: string;
+    let soft = false;
     try {
       const hasInstruction = !!attrs.contextNote?.trim();
       response = await this.statusBar.withBusy(() =>
         this.router.complete({
           system: this.systemPrompt(attrs.op, langProfile, attrs.contextNote),
           user: userMsg,
-          maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(text)),
+          maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(textLf)),
           signal: new AbortController().signal,
           profileId: llmProfile.id,
           // Instruction notes are deliberate edits (typing, renames, etc.) — not Guardian typo-judging.
           kind: attrs.op === "fix" && !hasInstruction ? "fix" : "raw",
-          judgeOriginal: attrs.op === "fix" && !hasInstruction ? text : undefined,
+          judgeOriginal: attrs.op === "fix" && !hasInstruction ? textLf : undefined,
         })
       );
     } catch (err) {
@@ -151,37 +189,27 @@ export class StagedExecutor {
           modelText: err.candidate,
         });
         if (cfg().onReject === "softApply") {
-          const applied = await this.queue.applyChange(
-            doc,
-            blockRange.start.line,
-            blockRange.end.line,
-            text,
-            normalizeModelText(err.candidate),
-            { profileId: llmProfile.id, op: attrs.op, label: `${queueLabel} (soft)` }
-          );
-          if (applied) {
-            reportOutcome("soft-applied rejected fix (revert at cursor)", {
-              kind: "ok",
-              output: this.output,
-              statusBar: this.statusBar,
-              logPrefix: "[staged]",
-            });
-            return { ok: true };
-          }
+          response = err.candidate;
+          soft = true;
+        } else {
+          return { ok: false };
         }
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        reportOutcome(`failed — ${msg}`, {
+          kind: "error",
+          output: this.output,
+          statusBar: this.statusBar,
+          logPrefix: "[staged]",
+        });
         return { ok: false };
       }
-      const msg = err instanceof Error ? err.message : String(err);
-      reportOutcome(`failed — ${msg}`, {
-        kind: "error",
-        output: this.output,
-        statusBar: this.statusBar,
-        logPrefix: "[staged]",
-      });
-      return { ok: false };
     }
 
     let result = normalizeModelText(response);
+    if (attrs.op === "fix" || attrs.op === "docs") {
+      result = preserveLeadingIndent(textLf, result);
+    }
     if (attrs.op === "fix" && isUnchanged(result)) {
       if (attrs.contextNote?.trim()) {
         reportOutcome("model returned UNCHANGED despite context note", {
@@ -196,7 +224,7 @@ export class StagedExecutor {
       reportOutcome("already correct", { kind: "ok", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]" });
       return { ok: true };
     }
-    if (result.trim().length === 0 || result === text) {
+    if (result.trim().length === 0 || result === textLf) {
       reportOutcome("no changes from model", {
         kind: "skip",
         output: this.output,
@@ -208,8 +236,8 @@ export class StagedExecutor {
     }
 
     if (attrs.op === "caveman") {
-      result = alignToLineCount(result, text.split("\n").length, true);
-      const merged = mergeCavemanComments(text, result, langProfile);
+      result = alignToLineCount(result, textLf.split("\n").length, true);
+      const merged = mergeCavemanComments(textLf, result, langProfile);
       if (!merged) {
         const action = await offerRejectRecovery(
           "caveman rewrote code or line count — skipped",
@@ -224,13 +252,23 @@ export class StagedExecutor {
       }
     }
 
-    if (attrs.op === "docs" && !this.docsPreserveCode(text, result, langProfile)) {
+    if (attrs.op === "docs" && !docsPreservesCode(textLf, result, langProfile)) {
       const action = await offerRejectRecovery(
         "docs altered code — skipped",
         result,
         this.output
       );
       if (action !== "force") {
+        return { ok: false };
+      }
+    }
+
+    if (plainFix && c.fixLocalChecks) {
+      const check = checkFix({ original: textLf, corrected: result, languageId: doc.languageId,
+        fileNames: new Set(names), builtins: builtinNames(doc.languageId) });
+      if (!check.ok) {
+        this.output.appendLine(`[staged] local check rejected (${check.reason})\n${result.slice(0, 800)}`);
+        vscode.window.setStatusBarMessage(`Autocorrect: skipped fix — ${check.reason}`, 4000);
         return { ok: false };
       }
     }
@@ -245,7 +283,7 @@ export class StagedExecutor {
       return { ok: false };
     }
 
-    const inLines = text.split("\n").length;
+    const inLines = textLf.split("\n").length;
     const outLines = result.split("\n").length;
     if (outLines !== inLines) {
       this.output.appendLine(`[staged] line count ${inLines} → ${outLines} (block replace)`);
@@ -280,7 +318,7 @@ export class StagedExecutor {
         blockRange.end.line,
         text,
         result,
-        queueLabel,
+        soft ? `${queueLabel} (soft)` : queueLabel,
         attrs.op,
         attrs.contextNote,
         llmProfile.id,
@@ -299,6 +337,9 @@ export class StagedExecutor {
       return { ok: true, queued: true };
     }
 
+    const beforeParser = c.verifyAfterApply && attrs.op === "fix" && !fromQueue
+      ? await snapshotParserDiagnostics(doc, this.syntaxChecker) : undefined;
+    const beforeDiags = c.verifyAfterApply && attrs.op === "fix" && !fromQueue ? snapshotDiagnostics(doc.uri) : undefined;
     const applied = await this.queue.applyChange(
       doc,
       blockRange.start.line,
@@ -308,10 +349,11 @@ export class StagedExecutor {
       {
         profileId: llmProfile.id,
         op: attrs.op,
-        label: queueLabel,
+        label: soft ? `${queueLabel} (soft)` : queueLabel,
       }
     );
     if (applied) {
+      if (beforeDiags) this.verifier.verify(doc, applied, beforeDiags, beforeParser);
       this.flash.show(
         editor,
         new vscode.Range(
@@ -321,7 +363,7 @@ export class StagedExecutor {
           0
         )
       );
-      reportOutcome(`${attrs.op} applied`, {
+      reportOutcome(soft ? "soft-applied rejected fix (revert at cursor)" : `${attrs.op} applied`, {
         kind: "ok",
         output: this.output,
         statusBar: this.statusBar,
@@ -329,7 +371,7 @@ export class StagedExecutor {
       });
       return { ok: true };
     }
-    reportOutcome("apply failed — see Output (ledger conflict, revert failed, or baseline stale)", {
+    reportOutcome("apply failed — see Output (baseline stale or editor rejected edit)", {
       kind: "error",
       output: this.output,
       statusBar: this.statusBar,
@@ -367,28 +409,12 @@ export class StagedExecutor {
     return (
       `You are a strict code autocorrector for ${profile.name}. ` +
       `Fix typos and syntax errors in the provided CODE block only. ` +
+      `If diagnostics are listed, they come from the language server and usually point at the real mistake; fix that mistake. ` +
       `Do not include surrounding context, other functions, or file headers in your reply. ` +
       `Keep roughly the same number of lines; only add lines when required for syntax ` +
       `(e.g. a missing closing bracket). ` +
       `If already correct, reply exactly: UNCHANGED\n` +
       `Reply with ONLY the corrected CODE block — no fences, no prose.`
     );
-  }
-
-  private docsPreserveCode(original: string, result: string, profile: LanguageProfile): boolean {
-    const classRe = /\bclass\s+\w+/g;
-    if ((result.match(classRe) ?? []).length > (original.match(classRe) ?? []).length) {
-      return false;
-    }
-    for (const line of original.split("\n")) {
-      if (isCommentOrBlank(line, profile)) {
-        continue;
-      }
-      const t = line.trim();
-      if (t.length > 0 && !result.includes(line) && !result.includes(t)) {
-        return false;
-      }
-    }
-    return true;
   }
 }

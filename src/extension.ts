@@ -1,15 +1,18 @@
 import * as vscode from "vscode";
 import { BlockCapture } from "./blockCapture";
+import { selectionLineSpan } from "./blockMath";
 import { blockLineRange } from "./blockApply";
 import { showCommandMenu } from "./commandMenu";
-import { activeLlmProfile, cfg, setDisableAutocorrect, setEnabled, setQueueEnabled } from "./config";
+import { activeLlmProfile, cfg, invalidateConfigCache, setDisableAutocorrect, setEnabled, setQueueEnabled } from "./config";
 import { ContextAssemblerService } from "./contextAssembler";
 import { Commenter } from "./commenter";
 import { FixQueue } from "./fixQueue";
 import { Flash } from "./flash";
 import { LineCorrector } from "./lineCorrector";
+import { endpointFingerprint, secretKeyBindingForProfile } from "./endpointFingerprint";
 import { LlmClient, secretKeyForProfile } from "./llm";
 import { LlmRouter } from "./llmRouter";
+import { LogicReviewer } from "./logicReviewer";
 import { ProfileConcurrency } from "./profileConcurrency";
 import { clearAllModes } from "./modeContext";
 import { ModeController } from "./modeController";
@@ -18,32 +21,42 @@ import { StageDecorations } from "./stageDecorations";
 import { StagedExecutor } from "./stagedExecutor";
 import { QueueExecutor } from "./queueExecutor";
 import { StatusBar } from "./statusBar";
+import { defaultWasmDir, SyntaxChecker } from "./syntaxCheck";
 import { maybeOfferCursorDiagnosticDefaults } from "./cursorOnboard";
-import { maybeSeedDefaultProfiles } from "./profilesOnboard";
+import { maybeMigrateSeededProfiles } from "./profilesMigrate";
 import { pickAndRunTypingHarness } from "./typingHarness";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("LLM Autocorrect");
   const statusBar = new StatusBar();
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration("autocorrect")) {
+      invalidateConfigCache();
+      statusBar.refresh();
+    }
+  }));
   const flash = new Flash();
   const llm = new LlmClient(context.secrets);
   llm.setOutput(output);
   const profileConcurrency = new ProfileConcurrency();
   const router = new LlmRouter(llm, profileConcurrency);
   router.setOutput(output);
-  const contextAsm = new ContextAssemblerService();
+  const contextAsm = new ContextAssemblerService(output);
   const stageDeco = new StageDecorations();
   const fixQueue = new FixQueue(statusBar, output);
-  const lineCorrector = new LineCorrector(router, contextAsm, statusBar, fixQueue, output);
+  const syntaxChecker = new SyntaxChecker(defaultWasmDir());
+  const lineCorrector = new LineCorrector(router, contextAsm, statusBar, fixQueue, output, syntaxChecker);
   const pasteTranslator = new PasteTranslator(router, statusBar, output);
   const blockCapture = new BlockCapture(output);
+  const logicReviewer = new LogicReviewer(router, blockCapture, statusBar, output);
   const stagedExecutor = new StagedExecutor(
     router,
     contextAsm,
     fixQueue,
     statusBar,
     flash,
-    output
+    output,
+    syntaxChecker
   );
   const queueExecutor = new QueueExecutor(stagedExecutor, lineCorrector);
   fixQueue.setExecutor(queueExecutor);
@@ -66,7 +79,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ` · profile=${cfg().activeProfile}` +
       ` · [${cfg().profiles.map((p) => p.id).join(", ")}]`
   );
-  void maybeSeedDefaultProfiles(context, output);
+  await maybeMigrateSeededProfiles(context, output);
   void maybeOfferCursorDiagnosticDefaults(context, output);
 
   context.subscriptions.push(
@@ -79,13 +92,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     lineCorrector,
     pasteTranslator,
     blockCapture,
+    logicReviewer,
     modeController,
-
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("autocorrect")) {
-        statusBar.refresh();
-      }
-    }),
 
     vscode.commands.registerCommand("autocorrect.statusBarClick", async () => {
       if (statusBar.isInMode()) {
@@ -118,12 +126,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (key === undefined) {
         return;
       }
-      const secretKey = secretKeyForProfile(pick.profile.id, pick.profile.provider);
+      const secretKey = secretKeyForProfile(pick.profile.id);
       if (key === "") {
         await context.secrets.delete(secretKey);
+        await context.secrets.delete(secretKeyBindingForProfile(pick.profile.id));
         vscode.window.setStatusBarMessage(`Autocorrect: cleared key for ${pick.profile.label}`, 3000);
       } else {
         await context.secrets.store(secretKey, key);
+        await context.secrets.store(secretKeyBindingForProfile(pick.profile.id), endpointFingerprint(pick.profile));
         vscode.window.setStatusBarMessage(`Autocorrect: key saved for ${pick.profile.label}`, 3000);
       }
     }),
@@ -135,6 +145,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("autocorrect.correctSelection", () =>
       lineCorrector.correctLineNearCursor(false)
     ),
+
+    vscode.commands.registerCommand("autocorrect.reviewLogic", () => logicReviewer.run()),
+    vscode.commands.registerCommand("autocorrect.clearLogicSuggestions", () => logicReviewer.clear()),
 
     vscode.commands.registerCommand("autocorrect.showMenu", () => showCommandMenu()),
 
@@ -225,11 +238,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       const staged = blockCapture.getStagedRange(editor);
+      const selection = editor.selection;
+      const span = selectionLineSpan(selection.start.line, selection.end.line, selection.end.character);
       const range =
         staged ??
         (editor.selection.isEmpty
           ? undefined
-          : blockLineRange(editor.document, editor.selection.start.line, editor.selection.end.line));
+          : blockLineRange(editor.document, span.startLine, span.endLine));
       if (!range) {
         vscode.window.setStatusBarMessage("Autocorrect: select a block first", 3000);
         return;

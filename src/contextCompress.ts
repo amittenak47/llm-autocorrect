@@ -17,7 +17,7 @@ export function truncateLines(text: string, maxChars: number): string {
 }
 
 /** Collapse consecutive import lines into one summary line. */
-export function collapseImports(text: string): string {
+export function collapseImports(text: string, lineCommentPrefix: string): string {
   const lines = text.split("\n");
   const out: string[] = [];
   let importRun = 0;
@@ -29,14 +29,14 @@ export function collapseImports(text: string): string {
       }
     } else {
       if (importRun > 1) {
-        out.push(`// … ${importRun - 1} more import line(s)`);
+        out.push(`${lineCommentPrefix} … ${importRun - 1} more import line(s)`);
       }
       importRun = 0;
       out.push(line);
     }
   }
   if (importRun > 1) {
-    out.push(`// … ${importRun - 1} more import line(s)`);
+    out.push(`${lineCommentPrefix} … ${importRun - 1} more import line(s)`);
   }
   return out.join("\n");
 }

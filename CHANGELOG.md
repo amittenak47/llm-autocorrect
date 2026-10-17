@@ -4,6 +4,41 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Syntax check (tree-sitter)** — the extension parses the file itself for Python, JavaScript, TypeScript, Go, Java, Rust and C/C++ (`autocorrect.syntax.useParser`). Enter fixes start immediately on a parser-detected error instead of waiting for the language server; unfinished code (an open bracket, a missing closer) is ignored. Zig still relies on the language server. New dependency: `@vscode/tree-sitter-wasm` (only the needed grammars ship).
+- **Logic suggestions** — **Autocorrect: Check for Logic Bugs** reviews the selection, staged block or enclosing function for likely logic bugs (off-by-one, inverted conditions, wrong variable…) and lists them in Problems with an optional **Apply suggestion** quick fix. Never applies anything on its own (`autocorrect.logic.profileId`, `autocorrect.logic.maxIssues`).
+- **Better prompts** — line/block fixes now include the language server's (and parser's) error messages, names defined in the file, and a few examples; a multi-line statement (open bracket or `\` continuation) is sent whole. Each is a setting: `prompt.includeDiagnostics`, `prompt.includeNames`, `prompt.examples`, `line.wholeStatement`.
+- **Local checks before applying** (`fix.localChecks`) — reject a fix that changes string contents (f-string / template placeholders count as code), introduces a name not defined in the file or a builtin, or rewrites most of the line.
+- **Undo bad fixes automatically** (`apply.verifyAfterApply`, `apply.verifyWaitMs`) — after a fix, if a new error appears near it, the fix is reverted. Lines you are typing on while it waits are ignored.
+- **Privacy** — `context.excludeGlobs` (`.env`, keys, credentials… never used as context or corrected), secret redaction in context (`privacy.redactSecrets`), and lines that look like they contain a secret are not sent to cloud profiles (`privacy.skipSecretTargetsForCloud`).
+- **Profile overrides** — `autocorrect.profiles` now holds only overrides by id (plus custom profiles) and `autocorrect.hiddenProfiles` hides built-ins, so updated defaults reach everyone. Copies seeded by earlier versions are migrated once to just the fields you changed.
+- **Harness scoring** — the typing harness reports fixed / missed / wrong / broke-correct counts with precision and recall, and writes `<plan>.score.json` including the settings used.
+- Per-language error patterns for TypeScript/JavaScript, Go, Rust, Java, C/C++ and Zig (upstream redirect no longer Python-only).
+
+### Changed
+
+- **Upstream ("previous line") fixes** need evidence: only redirect to a line with a real syntax error, at most 8 lines up; after a no-op on the upstream line the original line is retried; no blind retry of the line above. Same-text requests in flight are deduplicated and recent no-ops are cached.
+- Applying a fix over an earlier autocorrect fix supersedes it instead of asking to revert first.
+- Endpoint settings (`profiles`, `provider`, `baseUrl`, `model`, `guardian.profileId`) are machine-scoped and restricted in untrusted workspaces; stored API keys are bound to the endpoint they were saved for.
+- Soft-applied Guardian rejections go through the same checks as accepted fixes.
+- Settings are cached until they change.
+
+### Fixed
+
+- A line could only be autocorrected once per session (revert ledger never tracked edits).
+- Block fixes removed the first line's indentation when the model replied without a code fence.
+- Line-fix context labelled lines below the target as "above".
+- Queue highlights stayed after Apply/Clear; staged blocks did not follow edits; staged border/op markers vanished immediately.
+- Selections ending at column 0 included an extra line; `[::1]`, `0.0.0.0` and `127.x` were not treated as local.
+- Truncated model replies (`max_tokens`) were applied.
+- A workspace could redirect a stored API key to another server.
+- Queue review could apply items that changed while the picker was open; "Expand & merge" in review mode created items Q could not show; single-line deferred tasks lost their op/instruction.
+- Docs validation accepted re-indented code; caveman comments broke on CRLF files.
+- Multi-cursor Enter, Undo while waiting for diagnostics, and disabling the extension mid-check were not handled.
+- Guardian could deadlock when it shared a profile with the fixer; `maxConcurrent` changes needed a reload; `AbortSignal.any` broke VS Code < 1.90.
+- Python slices (`nums[::2]`) were offered as C++ translations.
+
 ## [0.3.0] - 2026-07-27
 
 ### Added

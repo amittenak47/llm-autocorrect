@@ -5,6 +5,8 @@ interface MenuItem extends vscode.QuickPickItem {
 }
 
 const ITEMS: MenuItem[] = [
+  { label: "/logic", description: "Check for logic bugs", command: "autocorrect.reviewLogic" },
+  { label: "/clear-logic", description: "Clear logic suggestions", command: "autocorrect.clearLogicSuggestions" },
   { label: "/menu", description: "Enter modal menu mode", command: "autocorrect.enterMenuMode" },
   { label: "/block", description: "Correct selected / staged block", command: "autocorrect.correctBlock" },
   { label: "/line", description: "Correct line near cursor", command: "autocorrect.correctSelection" },

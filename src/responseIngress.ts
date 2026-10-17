@@ -82,7 +82,7 @@ export function mergeCavemanComments(
   modelText: string,
   profile: LanguageProfile
 ): string | undefined {
-  const origLines = original.split("\n");
+  const origLines = original.split("\n").map((line) => line.replace(/\r$/, ""));
   const modelLinesArr = modelText.split("\n");
   if (origLines.length !== modelLinesArr.length) {
     return undefined;
@@ -111,4 +111,54 @@ export function mergeCavemanComments(
     }
   }
   return out.join("\n");
+}
+
+/** Preserve whole code lines in order; allow only documentation as extra lines. */
+export function docsPreservesCode(original: string, result: string, profile: LanguageProfile): boolean {
+  const isLineComment = (line: string): boolean =>
+    profile.lineCommentPrefixes.some((prefix) => line.trimStart().startsWith(prefix));
+  const code = original.split("\n").map((line) => line.trimEnd())
+    .filter((line) => line.length > 0 && !isLineComment(line));
+  let next = 0;
+  let closing: string | undefined;
+  for (const line of result.split("\n").map((line) => line.trimEnd())) {
+    const trimmed = line.trimStart();
+    const matched = next < code.length && line === code[next];
+    if (matched) {
+      next++;
+    }
+    if (closing) {
+      const end = trimmed.indexOf(closing);
+      if (end >= 0) {
+        const suffix = trimmed.slice(end + closing.length);
+        if (!matched && suffix.trim() && !isLineComment(suffix)) {
+          return false;
+        }
+        closing = undefined;
+      }
+      continue;
+    }
+    if (!trimmed || isLineComment(line)) {
+      continue;
+    }
+    const triple = profile.id === "python" ? trimmed.match(/^(\x22{3}|\x27{3})/)?.[0] : undefined;
+    const opener = triple ?? (trimmed.startsWith("/*") ? "/*" : undefined);
+    if (!opener) {
+      if (!matched) {
+        return false;
+      }
+      continue;
+    }
+    const delimiter = triple ?? "*/";
+    const end = trimmed.indexOf(delimiter, opener.length);
+    if (end < 0) {
+      closing = delimiter;
+    } else {
+      const suffix = trimmed.slice(end + delimiter.length);
+      if (!matched && suffix.trim() && !isLineComment(suffix)) {
+        return false;
+      }
+    }
+  }
+  return next === code.length && closing === undefined;
 }

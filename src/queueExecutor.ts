@@ -23,7 +23,7 @@ export class QueueExecutor {
       return false;
     }
 
-    if (fix.endLine === undefined) {
+    if (fix.endLine === undefined && fix.op === "fix" && !fix.contextNote.trim()) {
       return this.line.executeQueuedLine(fix);
     }
 
@@ -31,7 +31,7 @@ export class QueueExecutor {
     if (!editor) {
       editor = await vscode.window.showTextDocument(doc, { preview: false });
     }
-    const range = blockLineRange(doc, fix.line, fix.endLine);
+    const range = blockLineRange(doc, fix.line, fix.endLine ?? fix.line);
     if (doc.getText(range) !== fix.original) {
       return false;
     }
@@ -44,7 +44,8 @@ export class QueueExecutor {
         tiers: fix.tiers,
         profileId: fix.profileId,
       },
-      false
+      false,
+      true
     );
     return result.ok;
   }

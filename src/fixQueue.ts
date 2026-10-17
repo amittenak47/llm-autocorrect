@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { activeLlmProfile, cfg } from "./config";
+import { activeLlmProfile, cfg, isDeferQueueMode } from "./config";
 import {
   AppliedChange,
   applyRegionReplace,
@@ -13,6 +13,7 @@ import { blockLineRange } from "./blockApply";
 import { decorationLineNumbers } from "./queueDeco";
 import { profileColor } from "./profiles";
 import {
+  applyLineChange,
   baselineHash,
   canMergeRegions,
   LineRegion,
@@ -57,8 +58,6 @@ export class FixQueue implements vscode.Disposable {
   readonly ledger = new ChangeLedger();
   private readonly fileApply = new FileApplyQueue();
   private readonly profileDecos = new Map<string, vscode.TextEditorDecorationType>();
-  private readonly lineDecoration: vscode.TextEditorDecorationType;
-  private readonly pendingLineDecoration: vscode.TextEditorDecorationType;
   private readonly gutterDecoration: vscode.TextEditorDecorationType;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -66,31 +65,11 @@ export class FixQueue implements vscode.Disposable {
     private readonly statusBar: StatusBar,
     private readonly output: vscode.OutputChannel
   ) {
-    this.lineDecoration = vscode.window.createTextEditorDecorationType({
-      isWholeLine: true,
-      backgroundColor: "rgba(255, 200, 100, 0.12)",
-      borderWidth: "0 0 0 3px",
-      borderStyle: "dashed",
-      borderColor: "rgba(255, 200, 100, 0.65)",
-      overviewRulerColor: "rgba(255, 200, 100, 0.85)",
-      overviewRulerLane: vscode.OverviewRulerLane.Right,
-    });
-    this.pendingLineDecoration = vscode.window.createTextEditorDecorationType({
-      isWholeLine: true,
-      backgroundColor: "rgba(140, 180, 255, 0.1)",
-      borderWidth: "0 0 0 3px",
-      borderStyle: "dotted",
-      borderColor: "rgba(140, 180, 255, 0.7)",
-      overviewRulerColor: "rgba(140, 180, 255, 0.85)",
-      overviewRulerLane: vscode.OverviewRulerLane.Right,
-    });
     this.gutterDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
       backgroundColor: "rgba(255, 200, 100, 0.06)",
     });
     this.disposables.push(
-      this.lineDecoration,
-      this.pendingLineDecoration,
       this.gutterDecoration,
       vscode.workspace.onDidChangeTextDocument((e) => this.onDocChange(e)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.redecorateAll()),
@@ -173,35 +152,10 @@ export class FixQueue implements vscode.Disposable {
     baseline: string,
     newText: string,
     meta: { profileId: string; op: StagedOp; label: string }
-  ): Promise<boolean> {
+  ): Promise<AppliedChange | undefined> {
     const uri = doc.uri.toString();
     const anchor = normalizeRegion(startLine, endLine);
     const hash = baselineHash(baseline);
-    const ledgerConflict = this.ledgerConflict(uri, anchor);
-    if (ledgerConflict) {
-      const ok = await this.confirmRevertApplied(ledgerConflict);
-      if (!ok) {
-        this.output.appendLine(
-          `[queue] apply cancelled — prior fix still in revert ledger ` +
-            `(lines ${ledgerConflict.region.startLine + 1}-${ledgerConflict.region.endLine + 1})`
-        );
-        return false;
-      }
-      const reverted = await this.fileApply.enqueue(uri, () => revertChange(doc, ledgerConflict));
-      if (!reverted) {
-        this.output.appendLine(
-          `[queue] apply aborted — could not revert prior fix ` +
-            `(lines ${ledgerConflict.region.startLine + 1}-${ledgerConflict.region.endLine + 1}; ` +
-            `buffer no longer matches applied text). Undo manually or use Remove or Revert at Cursor.`
-        );
-        return false;
-      }
-      this.ledger.remove(ledgerConflict.id);
-      this.output.appendLine(
-        `[queue] reverted prior fix on lines ${ledgerConflict.region.startLine + 1}-${ledgerConflict.region.endLine + 1}`
-      );
-    }
-
     const result = await this.fileApply.enqueue(uri, () =>
       applyRegionReplace(doc, anchor, baseline, newText, meta, this.ledger, hash)
     );
@@ -212,7 +166,20 @@ export class FixQueue implements vscode.Disposable {
           : `[queue] apply rejected by editor`
       );
     }
-    return result.ok;
+    return result.ok ? result.applied : undefined;
+  }
+
+  async revertApplied(doc: vscode.TextDocument, change: AppliedChange): Promise<boolean> {
+    return this.fileApply.enqueue(doc.uri.toString(), async () => {
+      if (!this.ledger.list(change.uri).includes(change)) {
+        return false;
+      }
+      const ok = await revertChange(doc, change);
+      if (ok) {
+        this.ledger.remove(change.id);
+      }
+      return ok;
+    });
   }
 
   async removeAtCursor(editor: vscode.TextEditor): Promise<void> {
@@ -289,24 +256,6 @@ export class FixQueue implements vscode.Disposable {
         canMergeRegions(region, normalizeRegion(f.line, f.endLine))
     );
 
-    const appliedOverlap = this.ledgerConflict(uri, region);
-
-    if (appliedOverlap) {
-      const revert = await this.confirmRevertApplied(appliedOverlap);
-      if (!revert) {
-        return false;
-      }
-      const reverted = await this.fileApply.enqueue(uri, () => revertChange(doc, appliedOverlap));
-      if (!reverted) {
-        this.output.appendLine(
-          `[queue] enqueue aborted — could not revert prior fix on lines ` +
-            `${appliedOverlap.region.startLine + 1}-${appliedOverlap.region.endLine + 1}`
-        );
-        return false;
-      }
-      this.ledger.remove(appliedOverlap.id);
-    }
-
     if (exact && exact.profileId !== profileId) {
       const replace = await this.confirmReplaceQueue(exact, "Another profile already queued this exact range.");
       if (!replace) {
@@ -322,7 +271,7 @@ export class FixQueue implements vscode.Disposable {
         return false;
       }
       this.fixes = this.fixes.filter((f) => f !== queueOverlap);
-    } else if (queueMerge && queueMerge.profileId === profileId) {
+    } else if (queueMerge && queueMerge.profileId === profileId && isDeferQueueMode()) {
       const action = await this.confirmMergeOrReplace(queueMerge, region);
       if (action === "cancel") {
         return false;
@@ -339,6 +288,18 @@ export class FixQueue implements vscode.Disposable {
         });
       }
       this.fixes = this.fixes.filter((f) => f !== queueMerge);
+    } else if (!isDeferQueueMode() && (exact?.profileId === profileId || queueOverlap?.profileId === profileId)) {
+      const overlapping = exact ?? queueOverlap!;
+      const region = normalizeRegion(overlapping.line, overlapping.endLine);
+      const replace = await vscode.window.showWarningMessage(
+        `Replace the queued item on lines ${region.startLine + 1}-${region.endLine + 1}?`,
+        { modal: true },
+        "Replace"
+      );
+      if (replace !== "Replace") {
+        return false;
+      }
+      this.fixes = this.fixes.filter((f) => f !== overlapping);
     } else if (exact && exact.profileId === profileId) {
       const update = await vscode.window.showWarningMessage(
         `Lines ${region.startLine + 1}-${region.endLine + 1} already queued for this profile. Update the queued item?`,
@@ -452,21 +413,6 @@ export class FixQueue implements vscode.Disposable {
     return "cancel";
   }
 
-  private async confirmRevertApplied(entry: AppliedChange): Promise<boolean> {
-    const profiles = cfg().profiles;
-    const pl = profiles.find((p) => p.id === entry.profileId);
-    const choice = await vscode.window.showWarningMessage(
-      `Lines ${entry.region.startLine + 1}-${entry.region.endLine + 1} already have an applied autocorrect fix [${pl?.label ?? entry.profileId}] in the revert ledger. Revert it and continue?`,
-      { modal: true },
-      "Revert & continue"
-    );
-    return choice === "Revert & continue";
-  }
-
-  private ledgerConflict(uri: string, region: LineRegion): AppliedChange | undefined {
-    return this.ledger.list(uri).find((a) => regionsOverlap(region, a.region));
-  }
-
   async review(profileFilter?: string): Promise<void> {
     if (cfg().queueMode === "deferExecution") {
       await this.reviewDeferredTasks(profileFilter);
@@ -508,10 +454,14 @@ export class FixQueue implements vscode.Disposable {
     if (!chosen) {
       return;
     }
-    const run = new Set(chosen.map((i) => i.fix));
-    const stillQueued = pool.length - run.size;
+    const tasks = chosen.map((i) => i.fix).filter((fix) => this.fixes.includes(fix));
+    const dropped = chosen.length - tasks.length;
+    if (dropped > 0) {
+      this.output.appendLine(`[queue] skipped ${dropped} item(s) changed while reviewing`);
+    }
+    const run = new Set(tasks);
+    const stillQueued = pool.filter((fix) => this.fixes.includes(fix)).length - run.size;
 
-    const tasks = chosen.map((i) => i.fix);
     const outcomes = await Promise.all(
       tasks.map(async (fix) => ({
         fix,
@@ -566,8 +516,13 @@ export class FixQueue implements vscode.Disposable {
     if (!chosen) {
       return;
     }
-    const keep = new Set(chosen.map((i) => i.fix));
-    const stillQueued = pool.length - keep.size;
+    const selected = chosen.map((i) => i.fix).filter((fix) => this.fixes.includes(fix));
+    const dropped = chosen.length - selected.length;
+    if (dropped > 0) {
+      this.output.appendLine(`[queue] skipped ${dropped} item(s) changed while reviewing`);
+    }
+    const keep = new Set(selected);
+    const stillQueued = pool.filter((fix) => this.fixes.includes(fix)).length - keep.size;
     if (stillQueued > 0) {
       this.output.appendLine(`[queue] ${stillQueued} change(s) left queued (unchecked)`);
     }
@@ -615,7 +570,7 @@ export class FixQueue implements vscode.Disposable {
   private async apply(toApply: QueuedFix[]): Promise<void> {
     const byUri = new Map<string, QueuedFix[]>();
     for (const f of toApply) {
-      if (f.pending) {
+      if (f.pending || !this.fixes.includes(f)) {
         continue;
       }
       const list = byUri.get(f.uri) ?? [];
@@ -655,6 +610,9 @@ export class FixQueue implements vscode.Disposable {
     let stale = 0;
 
     for (const f of sorted) {
+      if (!this.fixes.includes(f)) {
+        continue;
+      }
       const result = await applyRegionReplace(
         doc,
         f.anchorRegion,
@@ -687,12 +645,25 @@ export class FixQueue implements vscode.Disposable {
   private onDocChange(e: vscode.TextDocumentChangeEvent): void {
     const uri = e.document.uri.toString();
     const docFixes = this.fixes.filter((f) => f.uri === uri);
-    if (docFixes.length === 0) {
-      return;
-    }
+    const entries = this.ledger.list(uri);
+    const touchedEntries = new Set<AppliedChange>();
     const touched = new Set<QueuedFix>();
     for (const change of e.contentChanges) {
       const addedLines = change.text.split(/\r?\n/).length - 1;
+      for (const entry of entries) {
+        const moved = applyLineChange(entry.region, {
+          startLine: change.range.start.line,
+          endLine: change.range.end.line,
+          addedLines,
+        });
+        const delta = moved.region.startLine - entry.region.startLine;
+        entry.region = moved.region;
+        if (moved.touched) {
+          touchedEntries.add(entry);
+        } else if (delta !== 0) {
+          entry.anchorRegion = shiftRegion(entry.anchorRegion, delta);
+        }
+      }
       for (const f of docFixes) {
         if (f.endLine !== undefined) {
           if (change.range.start.line <= f.endLine && change.range.end.line >= f.line) {
@@ -723,6 +694,13 @@ export class FixQueue implements vscode.Disposable {
         if (shifted.touched) {
           touched.add(f);
         }
+      }
+    }
+    for (const entry of touchedEntries) {
+      const region = entry.region;
+      if (region.endLine >= e.document.lineCount ||
+          e.document.getText(blockLineRange(e.document, region.startLine, region.endLine)) !== entry.applied) {
+        this.ledger.remove(entry.id);
       }
     }
     let dropped = 0;
@@ -780,13 +758,16 @@ export class FixQueue implements vscode.Disposable {
         }
       }
 
-      editor.setDecorations(this.lineDecoration, []);
-      editor.setDecorations(this.pendingLineDecoration, []);
-      for (const [profileId, ranges] of readyByProfile) {
-        editor.setDecorations(this.profileDeco(profileId, false), ranges);
+      for (const profileId of readyByProfile.keys()) {
+        this.profileDeco(profileId, false);
       }
-      for (const [profileId, ranges] of pendingByProfile) {
-        editor.setDecorations(this.profileDeco(profileId, true), ranges);
+      for (const profileId of pendingByProfile.keys()) {
+        this.profileDeco(profileId, true);
+      }
+      for (const [key, deco] of this.profileDecos) {
+        const profileId = key.slice(0, -2);
+        const bucket = key.endsWith(":p") ? pendingByProfile : readyByProfile;
+        editor.setDecorations(deco, bucket.get(profileId) ?? []);
       }
       editor.setDecorations(this.gutterDecoration, gutterRanges);
     }

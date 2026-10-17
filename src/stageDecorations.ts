@@ -29,6 +29,8 @@ const TIER_COLORS = [
 ];
 
 export class StageDecorations implements vscode.Disposable {
+  private borderDeco: vscode.TextEditorDecorationType | undefined;
+  private opDeco: vscode.TextEditorDecorationType | undefined;
   private readonly profileBorder: vscode.TextEditorDecorationType;
   private readonly tierMarks: vscode.TextEditorDecorationType[] = [];
   private stagedRange: vscode.Range | undefined;
@@ -74,6 +76,10 @@ export class StageDecorations implements vscode.Disposable {
   }
 
   private paint(): void {
+    this.borderDeco?.dispose();
+    this.opDeco?.dispose();
+    this.borderDeco = undefined;
+    this.opDeco = undefined;
     for (const editor of vscode.window.visibleTextEditors) {
       const uri = editor.document.uri.toString();
       if (uri !== this.stagedUri || !this.stagedRange || !this.attrs) {
@@ -87,7 +93,7 @@ export class StageDecorations implements vscode.Disposable {
       const pIdx = profiles.findIndex((p) => p.id === this.attrs!.profileId);
       const prof = profiles[pIdx] ?? profiles[0];
       const color = profileColor(prof, Math.max(0, pIdx));
-      const borderDeco = vscode.window.createTextEditorDecorationType({
+      const borderDeco: vscode.TextEditorDecorationType = this.borderDeco ?? vscode.window.createTextEditorDecorationType({
         isWholeLine: true,
         borderWidth: "0 0 0 4px",
         borderStyle: "solid",
@@ -98,11 +104,11 @@ export class StageDecorations implements vscode.Disposable {
         lines.push(new vscode.Range(ln, 0, ln, 0));
       }
       editor.setDecorations(borderDeco, lines);
-      borderDeco.dispose();
+      this.borderDeco = borderDeco;
 
       const opColor = OP_COLORS[this.attrs.op] ?? OP_COLORS.fix;
       const opHex = OP_GUTTER_HEX[this.attrs.op] ?? OP_GUTTER_HEX.fix;
-      const opDeco = vscode.window.createTextEditorDecorationType({
+      const opDeco: vscode.TextEditorDecorationType = this.opDeco ?? vscode.window.createTextEditorDecorationType({
         gutterIconPath: gutterDotUri(opHex),
         gutterIconSize: "75%",
         before: {
@@ -113,7 +119,7 @@ export class StageDecorations implements vscode.Disposable {
         },
       });
       editor.setDecorations(opDeco, [new vscode.Range(this.stagedRange.start.line, 0, this.stagedRange.start.line, 0)]);
-      opDeco.dispose();
+      this.opDeco = opDeco;
 
       const tiers = this.attrs.tiers;
       const tierList = [tiers.nearby, tiers.signature, tiers.recentEdits, tiers.openTabs, tiers.yank];
@@ -130,6 +136,8 @@ export class StageDecorations implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.borderDeco?.dispose();
+    this.opDeco?.dispose();
     this.profileBorder.dispose();
     for (const d of this.tierMarks) {
       d.dispose();

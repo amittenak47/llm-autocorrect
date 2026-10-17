@@ -25,6 +25,7 @@ export class ProfileConcurrency {
       pool = new Semaphore(limit);
       this.pools.set(profileId, pool);
     }
+    pool.setMax(limit);
     return pool.use(fn);
   }
 }

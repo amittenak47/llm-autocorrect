@@ -9,3 +9,13 @@ tsconfig.json
 **/*.map
 .gitignore
 *.vsix
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-bash.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-c-sharp.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-css.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-ini.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-php.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-powershell.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-regex.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-ruby.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-tsx.wasm
+node_modules/@vscode/tree-sitter-wasm/wasm/*.d.ts

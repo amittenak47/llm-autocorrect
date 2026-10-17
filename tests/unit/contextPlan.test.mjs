@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { decorationLineNumbers } from "../../out/queueDeco.js";
-import { assembleWithinBudget, dedupeChunks } from "../../out/contextCompress.js";
+import { assembleWithinBudget, collapseImports, dedupeChunks } from "../../out/contextCompress.js";
 import { EditRing } from "../../out/editRing.js";
 import { isLocalBaseUrl } from "../../out/localUrl.js";
 import { effectiveProfileTimeout, tokenBudgetForPolicy } from "../../out/profiles.js";
@@ -14,6 +14,11 @@ describe("queueDeco", () => {
 });
 
 describe("contextCompress", () => {
+  it("uses the language comment prefix when collapsing imports", () => {
+    assert.equal(collapseImports("import os\nimport sys\nx = 1", "#"), "import os\n# … 1 more import line(s)\nx = 1");
+    assert.equal(collapseImports("import a;\nimport b;", "//"), "import a;\n// … 1 more import line(s)");
+  });
+
   it("assembleWithinBudget never drops P0 target", () => {
     const chunks = [
       { tier: "target", label: "target", text: "x".repeat(400) },
@@ -55,5 +60,15 @@ describe("profiles", () => {
   it("token budgets by policy", () => {
     assert.equal(tokenBudgetForPolicy("minimal"), 512);
     assert.equal(tokenBudgetForPolicy("extended"), 2048);
+  });
+});
+
+describe("local URL variants", () => {
+  it("recognizes IPv6, wildcard IPv4 and all loopback IPv4 hosts", () => {
+    for (const url of ["http://[::1]:8080/v1", "http://0.0.0.0:8080/v1", "http://127.0.0.2:1234", "http://127.255.255.255:1234"]) {
+      assert.equal(isLocalBaseUrl(url), true, url);
+    }
+    assert.equal(isLocalBaseUrl("https://api.groq.com"), false);
+    assert.equal(isLocalBaseUrl("https://127.0.0.2.example.com"), false);
   });
 });

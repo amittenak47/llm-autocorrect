@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { selectionLineSpan } from "./blockMath";
+import { applyLineChange } from "./regionLock";
 import { cfg } from "./config";
 import { PROFILES, LanguageProfile } from "./languages";
 
@@ -66,7 +68,9 @@ export class BlockCapture implements vscode.Disposable {
       vscode.window.setStatusBarMessage("Autocorrect: select a block to stage", 3000);
       return false;
     }
-    return this.stageRange(editor, editor.selection);
+    const selection = editor.selection;
+    const span = selectionLineSpan(selection.start.line, selection.end.line, selection.end.character);
+    return this.stageRange(editor, new vscode.Range(span.startLine, 0, span.endLine, 0));
   }
 
   stageLineNearCursor(editor: vscode.TextEditor): boolean {
@@ -236,6 +240,25 @@ export class BlockCapture implements vscode.Disposable {
   }
 
   private onDocChange(e: vscode.TextDocumentChangeEvent): void {
+    if (this.stagedRange && e.document.uri.toString() === this.stagedDocUri) {
+      let region = { startLine: this.stagedRange.start.line, endLine: this.stagedRange.end.line };
+      for (const change of e.contentChanges) {
+        region = applyLineChange(region, {
+          startLine: change.range.start.line,
+          endLine: change.range.end.line,
+          addedLines: change.text.split(/\r?\n/).length - 1,
+        }).region;
+      }
+      const lastLine = e.document.lineCount - 1;
+      this.stagedRange = this.fullLines(e.document, new vscode.Range(
+        Math.min(region.startLine, lastLine), 0, Math.min(region.endLine, lastLine), 0
+      ));
+      for (const editor of vscode.window.visibleTextEditors) {
+        if (editor.document.uri.toString() === this.stagedDocUri) {
+          this.paintStaged(editor);
+        }
+      }
+    }
     if (!this.recording || e.document.uri.toString() !== this.captureDocUri) {
       return;
     }

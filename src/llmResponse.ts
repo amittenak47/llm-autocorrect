@@ -78,3 +78,14 @@ export function parseGeminiResponse(data: unknown): ParsedLlmResponse {
     finishReason: d.candidates?.[0]?.finishReason,
   };
 }
+
+export function isTruncatedFinish(reason?: string): boolean {
+  return reason === "length" || reason === "max_tokens" || reason === "MAX_TOKENS";
+}
+
+export class TruncatedResponseError extends Error {
+  constructor(profileId: string) {
+    super(`Model output was cut off (max tokens) — raise maxTokensLine/maxTokensBlock on profile "${profileId}".`);
+    this.name = "TruncatedResponseError";
+  }
+}

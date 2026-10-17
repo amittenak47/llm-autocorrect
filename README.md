@@ -52,6 +52,10 @@ You bring your own API key. Keys live in the editor's secret storage, not in set
 
 ---
 
+## Syntax check
+
+The extension parses the file itself with tree-sitter for Python, JavaScript, TypeScript, Go, Java, Rust, and C/C++, so Enter fixes work even when the language server has not reported yet. Zig still relies on the language server. Set `autocorrect.syntax.useParser` to `false` to disable parser checks (default: `true`).
+
 ## Quick start
 
 1. **Install** — VS Code Marketplace, Open VSX, or `.vsix`.
@@ -339,7 +343,17 @@ Token budget: profile `contextPolicy` (`minimal` 512 / `standard` 1024 / `extend
 }
 ```
 
-If `profiles` is unset, the package default is: `groq`, `gemini`, `anthropic`, `local` (Granite 4.1), `guardian`, `ollama`. On first activation the extension also **writes those into User settings** so they appear in Settings JSON (not Workspace — API endpoints are personal).
+Built-in profiles live in the extension: `groq`, `gemini`, `anthropic`, `local` (Granite 4.1), `guardian`, `ollama`. `autocorrect.profiles` defaults to `[]`; entries override built-ins by `id`, inheriting omitted fields, or add custom profiles when they have a new `id` and `provider`. Built-in updates therefore arrive automatically. A one-time migration removes unchanged seeded copies from User settings and keeps only your overrides. `autocorrect.hiddenProfiles` (default `[]`) hides profile ids; hiding every profile restores the built-ins.
+
+For example, in **User** settings:
+
+```jsonc
+"autocorrect.profiles": [
+  { "id": "groq", "timeoutMs": 3000 },
+  { "id": "work", "provider": "openai-compatible", "baseUrl": "http://gpu-box:8000/v1", "label": "Work GPU" }
+],
+"autocorrect.hiddenProfiles": ["gemini"]
+```
 
 Set API key per cloud profile: **Autocorrect: Set API Key**. Localhost needs no key.
 
@@ -613,17 +627,46 @@ Default model: **`llama-3.1-8b-instant`**. Free tier ~30 req/min.
 
 ---
 
+## Logic suggestions
+
+Run **Autocorrect: Check for Logic Bugs** to review a staged block, selection, or the function/class around the cursor for likely logic bugs. Suggestions appear in Problems with quick fixes to apply a single-line correction or dismiss it. Nothing is ever applied automatically. Use **Autocorrect: Clear Logic Suggestions** to clear them.
+
+`autocorrect.logic.profileId` selects the review profile (default `""` uses the active profile); `autocorrect.logic.maxIssues` limits suggestions per review (default `5`).
+
+## Privacy
+
+Requests send the target line or block (or source snippet for translation) to the chosen profile. Correction prompts can include nearby lines and enclosing signatures. Optional ring tiers add recent edits, open-tab signatures and the last large selection; `autocorrect.context.ringEnabled` defaults to `false`. Enabled prompt options can also send diagnostics, defined names and project or per-request notes. When Guardian is enabled, it receives the original target and candidate reply.
+
+`autocorrect.context.excludeGlobs` is machine-scoped and defaults to:
+
+```json
+["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/*.p12", "**/*.pfx", "**/secrets.*", "**/*secret*.json", "**/credentials*", "**/.aws/**", "**/.ssh/**", "**/.npmrc", "**/.pypirc", "**/*.kdbx"]
+```
+
+Matching files are excluded from correction and translation, selection capture, recent edit capture and open-tab context. Paths are matched case-insensitively, including Windows paths.
+
+`autocorrect.privacy.redactSecrets` defaults to `true`. It replaces recognized private-key blocks, API tokens, JWTs and quoted secret assignments with `«redacted»` in supplementary context before compression and budgeting. The target itself is preserved for correction or translation.
+
+`autocorrect.privacy.skipSecretTargetsForCloud` defaults to `true`: targets containing recognized secrets are skipped for cloud profiles. A profile is local only when its provider is `openai-compatible` and its URL is recognized as local (for example localhost or a loopback address). A cloud Guardian judge is also skipped for a secret-bearing original, accepting the candidate. Both privacy settings are machine-scoped. Detection uses patterns and cannot identify every possible secret.
+
+Endpoint settings (`autocorrect.profiles`, legacy `provider` / `model` / `baseUrl`, and `guardian.profileId`) are machine-scoped, so workspace settings cannot redirect API keys. Keys live in VS Code secret storage and are bound to the endpoint they were saved for; changing that endpoint requires saving the key again.
+
+---
+
 ## Settings
 
 | Setting | Default | Description |
 | --- | --- | --- |
 | `autocorrect.enabled` | `true` | Master switch |
 | `autocorrect.disableAutocorrect` | `false` | Stop automatic Enter line fixes; fix on demand only (tutorial 16) |
-| `autocorrect.profiles` | package default (6 profiles) | Named LLM endpoints in **User** settings (tutorial 11). First install seeds User settings when unset. Avoid Workspace unless the project needs different endpoints. |
+| `autocorrect.profiles` | `[]` | Override built-ins by id or add custom endpoints in **User** settings (tutorial 11). |
+| `autocorrect.hiddenProfiles` | `[]` | Profile ids to hide (machine-scoped). |
 | `autocorrect.activeProfile` | `groq` | Active profile id |
 | `autocorrect.guardian.enabled` | `false` | Score fix/paste replies with Granite Guardian before apply |
 | `autocorrect.guardian.profileId` | `guardian` | Judge profile (default `:8081`) |
 | `autocorrect.guardian.maxRetries` | `1` | Extra fixer regenerations after Guardian `no` |
+| `autocorrect.apply.verifyAfterApply` | `true` | Re-check immediate fixes; undo new errors when the error count does not decrease. Queue review is excluded. |
+| `autocorrect.apply.verifyWaitMs` | `2000` | Maximum wait for updated diagnostics after a fix (ms). |
 | `autocorrect.apply.onReject` | `softApply` | After final reject: `softApply` (apply + revert) or `skip` (log only) |
 | `autocorrect.provider` | `groq` | **Legacy** — only if `profiles` is empty |
 | `autocorrect.model` | `""` | **Legacy** model id |

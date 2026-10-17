@@ -22,3 +22,23 @@ export function formatUserInstruction(body: string, instruction: string): string
   }
   return `INSTRUCTION (apply this change to the CODE block):\n${note}\n\n${body}`;
 }
+
+/** Pure fix-message bodies; names precede any language-server diagnostics. */
+export function lineFixBody(
+  contextLines: string, targetLine: string, diagnostics?: string, names?: string[], multiline = false
+): string {
+  const body =
+    `Context (surrounding code; the line ">>> TARGET LINE <<<" marks where the TARGET ${multiline ? "lines sit" : "line sits"}):\n${contextLines || "(start of file)"}\n\n` +
+    `TARGET ${multiline ? "lines" : "line"}:\n${targetLine}`;
+  return appendFixDetails(body, names, diagnostics);
+}
+
+export function blockFixBody(code: string, diagnostics?: string, names?: string[]): string {
+  return appendFixDetails(`Code:\n${code}`, names, diagnostics);
+}
+
+function appendFixDetails(body: string, names?: string[], diagnostics?: string): string {
+  if (names?.length) body += `\n\nNames defined in this file: ${names.join(", ")}`;
+  if (diagnostics?.trim()) body += `\n\n${diagnostics}`;
+  return body;
+}

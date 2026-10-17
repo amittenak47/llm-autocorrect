@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { blockMaxTokens, shiftLine } from "../../out/blockMath.js";
+import { blockMaxTokens, selectionLineSpan, shiftLine } from "../../out/blockMath.js";
 
 describe("blockMaxTokens", () => {
   it("gives small blocks a floor", () => {
@@ -39,5 +39,17 @@ describe("shiftLine", () => {
 
   it("marks a same-line edit as touched without moving it", () => {
     assert.deepEqual(shiftLine(4, 4, 4, 0), { line: 4, touched: true });
+  });
+});
+
+describe("selectionLineSpan", () => {
+  it("excludes the final line when a multiline selection ends at column zero", () => {
+    assert.deepEqual(selectionLineSpan(2, 5, 0), { startLine: 2, endLine: 4 });
+    assert.deepEqual(selectionLineSpan(2, 3, 0), { startLine: 2, endLine: 2 });
+  });
+
+  it("keeps single-line selections and nonzero end columns", () => {
+    assert.deepEqual(selectionLineSpan(2, 2, 0), { startLine: 2, endLine: 2 });
+    assert.deepEqual(selectionLineSpan(2, 5, 3), { startLine: 2, endLine: 5 });
   });
 });
