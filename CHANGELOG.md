@@ -4,6 +4,8 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
 ### Added
 
 - **Syntax check (tree-sitter)** — the extension parses the file itself for Python, JavaScript, TypeScript, Go, Java, Rust and C/C++ (`autocorrect.syntax.useParser`). Enter fixes start immediately on a parser-detected error instead of waiting for the language server; unfinished code (an open bracket, a missing closer) is ignored. Zig still relies on the language server. New dependency: `@vscode/tree-sitter-wasm` (only the needed grammars ship).
