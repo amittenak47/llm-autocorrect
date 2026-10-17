@@ -281,7 +281,7 @@ export class LineCorrector implements vscode.Disposable {
     const diags = snapshotDiagnostics(doc.uri);
     return errors.filter((error) => !diags.some((d) => d.severity === 0 &&
       d.startLine <= error.line && error.line <= d.endLine)).map((error) => ({
-      startLine: error.line, endLine: error.line, character: error.column, message: error.message, severity: 0,
+      startLine: error.line, endLine: error.endLine, character: error.column, message: error.message, severity: 0,
     }));
   }
 
