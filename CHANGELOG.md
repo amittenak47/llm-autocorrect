@@ -8,9 +8,13 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ### Added
 
+- **Resize staged blocks** — **S** adjusts the range while keeping all flags; **Esc** restores the old range.
+- **Edit queued items** — menu **R** / **Autocorrect: Edit Queued Item at Cursor** pulls a pending or ready item into staged mode; **Esc** puts it back.
+- **Chained ops** — **Shift+D** / **Shift+F** adds docs / caveman after the main op, with one model call per step and one final apply; any failed step applies nothing.
+
 - **Syntax check (tree-sitter)** — the extension parses the file itself for Python, JavaScript, TypeScript, Go, Java, Rust and C++ (`autocorrect.syntax.useParser`). Enter fixes start immediately on a parser-detected error instead of waiting for the language server; unfinished code (an open bracket, a missing closer) is ignored. C and Zig rely on the language server; C++ keeps the parser. New dependency: `@vscode/tree-sitter-wasm` (only the needed grammars ship).
 - **Logic suggestions** — **Autocorrect: Check for Logic Bugs** reviews the selection, staged block or enclosing function for likely logic bugs (off-by-one, inverted conditions, wrong variable…) and lists them in Problems with an optional **Apply suggestion** quick fix. Never applies anything on its own (`autocorrect.logic.profileId`, `autocorrect.logic.maxIssues`).
-- **Better prompts** — line/block fixes now include the language server's (and parser's) error messages, names defined in the file, and (for line fixes only) a few examples; a multi-line statement (open bracket or `\` continuation) is sent whole. Each is a setting: `prompt.includeDiagnostics`, `prompt.includeNames`, `prompt.examples`, `line.wholeStatement`. With `autocorrect.debug: true`, line/staged calls log system and user prompts (up to 3000 characters each) for A/B testing.
+- **Better prompts** — line/block fixes now include the language server's (and parser's) error messages, names defined in the file, and (optional, off by default, line fixes only) a few examples; a multi-line statement (open bracket or `\` continuation) is sent whole. Each is a setting: `prompt.includeDiagnostics`, `prompt.includeNames`, `prompt.examples`, `line.wholeStatement`. With `autocorrect.debug: true`, line/staged calls log system and user prompts (up to 3000 characters each) for A/B testing.
 - **Local checks before applying** (`fix.localChecks`) — reject a fix that changes string contents (f-string / template placeholders count as code), introduces a name not defined in the file or a builtin, or rewrites most of the line.
 - **Undo bad fixes automatically** (`apply.verifyAfterApply`, `apply.verifyWaitMs`) — immediate fixes are checked (queue reviews are excluded). A new nearby error reverts the fix when the error count does not decrease; a fix is kept when the number of errors near it went down. Lines you are typing on while it waits are ignored.
 - **Privacy** — `context.excludeGlobs` (`.env`, keys, credentials… never used as context or corrected), secret redaction in context (`privacy.redactSecrets`), and lines that look like they contain a secret are not sent to cloud profiles (`privacy.skipSecretTargetsForCloud`).
@@ -20,6 +24,7 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ### Changed
 
+- **D** / **F** are toggles: pressing the same key again switches the staged op back to fix.
 - **Upstream ("previous line") fixes** need evidence: only redirect to a line with a real syntax error, at most 8 lines up; after a no-op on the upstream line the original line is retried; no blind retry of the line above. Same-text requests in flight are deduplicated and recent no-ops are cached.
 - Applying a fix over an earlier autocorrect fix supersedes it instead of asking to revert first.
 - Endpoint settings (`profiles`, `provider`, `baseUrl`, `model`, `guardian.profileId`) are machine-scoped and restricted in untrusted workspaces; stored API keys are bound to the endpoint they were saved for.
@@ -28,6 +33,10 @@ All notable user-facing changes to LLM Autocorrect are documented here.
 
 ### Fixed
 
+- **Model replies with copied labels** (`REPLY:`, `CODE:`, `Correction:`) were rejected instead of applied; the labels are now stripped, the line-fix examples no longer contain labels, and `prompt.examples` is off by default because small local models copied them.
+- **Block prompts** now mark surrounding context as read-only, so the model no longer rewrites context functions along with the selected block.
+- **Staged markers** are shown inline before the first staged line, horizontally, so a whole chain is visible: op names in run order (`fix → docs`) followed by the context-tier digits; `autocorrect.staged.markerStyle: "letters"` shows the pressed keys instead (`✓ D`). The broken `$(circle-filled)` text and the gutter dot from 0.3.0 are gone; hover shows op chain, profile, tiers and X note.
+- **S in staged mode** resizes the staged block while keeping flags; clear with **Esc**, then open the menu and **S** for a new capture.
 - String-literal checks now require exact contents with distinct matches; documentation checks reject code swallowed by inserted docstrings or block comments.
 - Whole-statement fixes no longer swallow enclosing block braces in C-family languages; Python dict/set continuations still expand.
 - CRLF fixes now record the document's actual line endings so revert succeeds.

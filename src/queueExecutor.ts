@@ -23,7 +23,7 @@ export class QueueExecutor {
       return false;
     }
 
-    if (fix.endLine === undefined && fix.op === "fix" && !fix.contextNote.trim()) {
+    if (fix.endLine === undefined && fix.op === "fix" && fix.then.length === 0 && !fix.contextNote.trim()) {
       return this.line.executeQueuedLine(fix);
     }
 
@@ -40,6 +40,7 @@ export class QueueExecutor {
       range,
       {
         op: fix.op,
+        then: [...fix.then],
         contextNote: fix.contextNote,
         tiers: fix.tiers,
         profileId: fix.profileId,

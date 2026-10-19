@@ -21,6 +21,10 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
+> **Privacy — what leaves your machine.** With a cloud profile (Groq, Gemini, Anthropic), the line or block being fixed and the code around it are sent to that provider. Use the `local` profile (llama-server / Ollama) to keep everything on your machine.
+> Since **v0.4.0**: secrets in surrounding code are redacted, lines that look like they contain a secret are not sent to cloud profiles, sensitive files (`.env`, keys, credentials) are never used, and a workspace's settings can no longer redirect your stored API key to another server.
+> **If you used v0.3.0 or earlier with a cloud profile:** code around your edits may have been sent to that provider unredacted, so a key hardcoded near an edit may have reached the provider you chose, and nowhere else. This mainly matters if you autocorrected config or `.env` files, or had `context.ringEnabled` on (which could include your last selection from any file). If so, kindly consider rotating any hardcoded keys. From v0.4.0, recognized secrets are redacted before anything is sent, so you don't need to worry about this going forward. See [Privacy](#privacy).
+
 ## Features (v0.4.0)
 
 | Feature | Summary |
@@ -95,6 +99,7 @@ While in menu, staged, or capture mode, the status bar shows a **persistent** ke
 | **C** | Fix line — **immediate** |
 | **Shift+C** | Stage cursor line → staged mode |
 | **S** | Staged Window — keyboard block sizing (WASD) |
+| **R** | Edit queued item at cursor |
 | **Q** | Review queue — **current profile** only |
 | **Shift+Q** | Review queue — **all profiles** |
 | **Esc** | Exit menu (clears staged block) |
@@ -109,6 +114,7 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | --- | --- |
 | **D** | Modifier: **documentation** (docstrings / comment blocks) |
 | **F** | Modifier: **caveman** (short inline comments) |
+| **Shift+D** / **Shift+F** | Toggle a docs / caveman follow-up step |
 | *(none)* | Modifier: **best-guess fix** (default) |
 | **X** | Modifier: custom prompt note (per request; saved with queued items) |
 | **1** | Context tier: nearby lines (`indentScope` default; see tutorial 10) |
@@ -126,7 +132,8 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | **E** | **Send now** — apply to file |
 | **Shift+E** | **Enqueue** — hold for review |
 | **A** / **C** | Immediate fix shortcuts (skip staging) |
-| **Esc** | Cancel staged block |
+| **S** | Resize the staged block, keeping all flags |
+| **Esc** | Clear staging (put a re-staged queued item back) |
 
 ### Staged Window (after **S**)
 
@@ -135,7 +142,7 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | **W** / **S** | Move selection end up / down |
 | **A** / **D** | Move to line start / end |
 | **E** | Finish sizing → **staged mode** (not an LLM send yet) |
-| **Esc** | Cancel Staged Window |
+| **Esc** | Cancel Staged Window (restore the old range and flags when resizing) |
 
 ---
 
@@ -144,9 +151,8 @@ See [Stage Modifiers](#stage-modifiers) for full tutorials (**7**–**11**).
 | In editor | Meaning |
 | --- | --- |
 | Green dashed lines | Staged block |
-| Colored left border | Active LLM profile |
-| **1–5** before first staged line | Context tier toggles (inline, not line-number gutter) |
-| Modifier dot (fix / docs / caveman) | Filled circle in the **line-number gutter** and inline before the first staged line — blue fix, purple docs, orange caveman |
+| Colored left border | Active LLM profile (blue groq, teal gemini, purple anthropic, orange local, pink ollama, grey guardian) |
+| Markers before the first staged line (inline, horizontal) | The ops in run order, each in its colour (blue fix, purple docs, orange caveman), then the active context-tier digits — e.g. **`fix → docs  1 2`**. With `autocorrect.staged.markerStyle: "letters"` the ops show as the keys you pressed instead: **`✓ D  1 2`** (✓ = fix, D = docs, F = caveman). Hover the markers for the full chain, profile, tiers and X note. |
 | Amber / blue dashed lines | Queued edits or tasks — **left border color = LLM profile** |
 
 Status bar shows modifiers and token estimate, e.g. `fix · @Groq free · ctx:12 · ~840tok`.
@@ -237,24 +243,96 @@ Set these in **staged mode** (green highlight) **before** **E** or **Shift+E** (
 | Key | Modifier |
 | --- | --- |
 | *(default)* | **best-guess fix** |
-| **D** | **documentation** — tutorial 7 |
-| **F** | **caveman** — tutorial 8 |
+| **D** | **documentation** — tutorial 7 (press again to switch back to fix) |
+| **F** | **caveman** — tutorial 8 (press again to switch back to fix) |
 | **X** | Custom prompt (per request) — tutorial 9 |
 | **1**–**5** | Context tiers — tutorial 10 |
 | **M** / **Shift+M** | LLM profile — tutorial 11 |
+
+**D** and **F** share one op slot: the last one pressed wins (**D** then **F** sends caveman only). Every other modifier can be set or changed in any order before sending; only the order of **Shift+D** / **Shift+F** follow-ups matters (it is the order the steps run).
+
+### Chains
+
+**Shift+D** adds/removes a docs follow-up; **Shift+F** adds/removes caveman.
+Steps appear in order, e.g. `fix → docs`, with at most two follow-ups.
+A follow-up cannot be the main op; **D** / **F** makes that op primary and removes it from the follow-ups.
+Each step makes one model call on the previous step's output. The result is applied
+once at the end; any failed step applies nothing. The **X** instruction note applies
+only to the first step.
+
+### Editing a staged or queued block
+
+In staged mode, **S** resizes the existing block using WASD while keeping its op,
+chain, context tiers, note and profile. **E** keeps the new range; **Esc** restores
+the old range. For a new selection, **Esc** clears staging; open the menu again
+and press **S**.
+
+With the cursor inside a queued item, press **R** in the menu or run
+**Autocorrect: Edit Queued Item at Cursor** (also `/edit-queued` in the command menu).
+This pulls a pending task or ready change into staged mode, keeping its flags.
+Change flags or press **S** to resize, then **E** / **Shift+E** replaces the old item.
+**Esc** puts the original item back. Edited buffer text must still match the queued baseline.
+
+### Modifier examples
+
+**D** (docs) and **F** (caveman) share one op slot — the last one pressed wins; no op key means **fix**. **Shift+D** / **Shift+F** keep the current op and add docs / caveman as a *then* step. Results below are typical model output; your model's wording will differ.
+
+Staged block (every example starts here):
+
+```python
+def total_price(items, tax):
+    totl = 0
+    for item in itmes:
+        totl += item.price
+    retrun totl * (1 + tax)
+```
+
+| Keys after staging | Ops sent | Result |
+| --- | --- | --- |
+| **E** | fix | typos fixed (`total`, `items`, `return`) |
+| **D** → **E** | docs | **rejected** — `docs altered code — skipped`: docs may not change code, so it fails on code with typos. Use the chain below. |
+| **Shift+D** → **E** | fix → docs | typos fixed **and** a docstring added, applied once |
+| **F** → **E** (on correct code) | caveman | short end-of-line comments, code unchanged |
+| **D** → **F** → **E** | caveman | F replaced D (one op slot) |
+| **D** → **Shift+F** → **E** | docs → caveman | docstring, then short comments |
+| **X** `add type hints` → **E** | fix + instruction | annotations added; logic unchanged (Guardian skipped for instructions) |
+| **Shift+D** → **X** `use snake_case names` → **E** | fix + instruction → docs | the instruction applies to the first step only |
+
+**Shift+D → E** (fix → docs):
+
+```python
+def total_price(items, tax):
+    """Return the total price of items including tax."""
+    total = 0
+    for item in items:
+        total += item.price
+    return total * (1 + tax)
+```
+
+**F → E** (caveman) on the corrected code:
+
+```python
+def total_price(items, tax):
+    total = 0  # start sum
+    for item in items:  # each item
+        total += item.price  # add price
+    return total * (1 + tax)  # add tax
+```
+
+One **Remove or Revert Queued Change at Cursor** undoes a whole chain, because it is applied as a single change.
 
 ### 7. Add docstrings (modifier **D**)
 
 **When:** Add documentation without changing code lines.
 
 1. Stage a block (tutorials 4–6).
-2. **D** — modifier switches to **documentation** (nearby + signature context on by default).
+2. **D** — modifier switches to **documentation** (nearby + signature context on by default). Press **D** again to go back to fix.
 3. Optional: **X** (tutorial 9); **1**/**2** (tutorial 10).
 4. **E** (tutorial 12) or **Shift+E** (tutorial 13).
 
 Palette alternative: **`Autocorrect: Add Docstrings / Comments`** on a selection (uses docs-oriented default tiers and active profile).
 
-Validation rejects output that alters code or invents new classes. If skipped after a paid call, the Output channel shows the model text and a picker offers **Copy model text** or **Force apply**.
+Validation requires every original code line to come back unchanged and in order (only docstrings and comments may be added), so docs on code that still has typos is always rejected — use the **fix → docs** chain (**Shift+D**, see [Chains](#chains)) to fix and document in one send. If skipped after a model call, the Output channel shows the model text and a picker offers **Copy model text** or **Force apply**.
 
 ---
 
@@ -263,7 +341,7 @@ Validation rejects output that alters code or invents new classes. If skipped af
 **When:** Ultra-short inline comments (`# get user`, `// loop nums`).
 
 1. Stage a block.
-2. **F** — modifier switches to **caveman** (nearby context only by default).
+2. **F** — modifier switches to **caveman** (nearby context only by default). Press **F** again to go back to fix.
 3. Optional: **X** (tutorial 9); press **2** if you want signature context.
 4. **E** (tutorial 12) or **Shift+E** (tutorial 13).
 
@@ -282,7 +360,7 @@ Palette: **`Autocorrect: Caveman Comments`**.
    - `only fix the typo, don't refactor`
    - `preserve all variable names`
    - `add types but don't change logic`
-3. The note shows in the status bar and is prepended to this request's prompt.
+3. The note shows in the status bar and is prepended to this request's prompt. With the default **fix** op, a note switches the request to instruction mode ("edit this block as instructed") and **skips Guardian**, because it is a deliberate edit rather than a typo fix. With **D** or **F**, the note is added as an extra instruction to that op.
 4. **E** (tutorial 12) or **Shift+E** (tutorial 13) — custom prompt is sent and **saved on queued items**.
 
 **X is not global context.** It applies to **one** staged send. For conventions on **every** request, use `autocorrect.prompt.prefix` (tutorial 17). **X** stacks on top of the global prefix when both are set.
@@ -579,6 +657,7 @@ Palette: **`Autocorrect: Translate Selection`**.
 | Autocorrect: Review Queued Fixes | All profiles |
 | Autocorrect: Apply All Queued Fixes | Apply all checkpoint edits (deferred tasks excluded) |
 | Autocorrect: Clear Queued Fixes | Empty queue |
+| Autocorrect: Edit Queued Item at Cursor | Pull a queued item into staged mode; Esc puts it back |
 | Autocorrect: Remove or Revert Queued Change at Cursor | Drop a queued item or revert the matching applied fix |
 | Autocorrect: Toggle Review Before Apply Mode | Enter fixes → review before apply |
 | Autocorrect: Toggle Enter Autocorrect Off | Toggle automatic Enter fixes |
@@ -705,10 +784,11 @@ Endpoint settings (`autocorrect.profiles`, legacy `provider` / `model` / `baseUr
 | `autocorrect.syntax.useParser` | `true` | Use built-in syntax-error evidence alongside the language server; C relies on the language server. |
 | `autocorrect.prompt.includeDiagnostics` | `true` | Include language-server and parser messages in correction prompts. |
 | `autocorrect.prompt.includeNames` | `true` | Include names defined in the file in fix prompts. |
-| `autocorrect.prompt.examples` | `true` | Include five examples in line fixes only. |
+| `autocorrect.prompt.examples` | `false` | Include five examples in line fixes only. Off by default: small local models tend to copy the examples into their reply. |
 | `autocorrect.line.wholeStatement` | `true` | Expand targets across open parentheses/brackets or backslash continuations; braces expand only in Python. |
 | `autocorrect.logic.profileId` | `""` | Logic-review profile; empty uses the active profile. |
 | `autocorrect.logic.maxIssues` | `5` | Maximum logic suggestions per review. |
+| `autocorrect.staged.markerStyle` | `"names"` | How staged ops are shown before the first staged line: `"names"` (`fix → docs`) or `"letters"` (`✓ D`, the keys you pressed). Tier digits follow either way. |
 | `autocorrect.fix.localChecks` | `true` | Check string contents, identifiers, and change size before applying fixes. |
 | `autocorrect.context.excludeGlobs` | `["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/*.p12", "**/*.pfx", "**/secrets.*", "**/*secret*.json", "**/credentials*", "**/.aws/**", "**/.ssh/**", "**/.npmrc", "**/.pypirc", "**/*.kdbx"]` | Exclude matching files from targets and context (machine-scoped). |
 | `autocorrect.privacy.redactSecrets` | `true` | Redact recognized secrets from context and diagnostic messages. |

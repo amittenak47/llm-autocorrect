@@ -28,8 +28,9 @@ test("block diagnostics use relative one-based lines and columns with inclusive 
 test("exactly five language-specific examples include an unchanged reply", () => {
   const py = lineFixExamples("python");
   assert.equal(py.split("\n").length, 5);
-  assert.ok(py.includes('TARGET: pritn("hi") => REPLY: print("hi")'));
-  assert.ok(py.includes("TARGET: x = compute(a, b) => REPLY: UNCHANGED"));
+  assert.ok(py.includes('pritn("hi")  ->  print("hi")'));
+  assert.ok(!/TARGET|REPLY/.test(py), "examples must not contain labels the model could copy");
+  assert.ok(py.includes("x = compute(a, b)  ->  UNCHANGED"));
   assert.equal(lineFixExamples("go"), lineFixExamples("typescript"));
   assert.equal(lineFixExamples("rust").split("\n").length, 5);
 });
@@ -39,6 +40,6 @@ test("fix prompt details follow code, names precede diagnostics, and omitted opt
   const body = lineFixBody("above", "a\nb", diagnostics, ["a", "b"], true);
   assert.ok(body.includes("TARGET lines:\na\nb\n\nNames defined in this file: a, b\n\n" + diagnostics));
   assert.ok(lineFixBody("", "x").endsWith("TARGET line:\nx"));
-  assert.equal(blockFixBody("x", "", []), "Code:\nx");
-  assert.equal(blockFixBody("x", diagnostics, ["a"]), "Code:\nx\n\nNames defined in this file: a\n\n" + diagnostics);
+  assert.equal(blockFixBody("x", "", []), "x");
+  assert.equal(blockFixBody("x", diagnostics, ["a"]), "x\n\nNames defined in this file: a\n\n" + diagnostics);
 });

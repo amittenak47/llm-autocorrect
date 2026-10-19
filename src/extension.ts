@@ -33,6 +33,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (e.affectsConfiguration("autocorrect")) {
       invalidateConfigCache();
       statusBar.refresh();
+      stageDeco.refresh();
     }
   }));
   const flash = new Flash();
@@ -172,6 +173,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       modeController.menuStageLine()
     ),
 
+    vscode.commands.registerCommand("autocorrect.restageQueuedAtCursor", () =>
+      modeController.restageQueuedAtCursor()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedResize", () =>
+      modeController.stagedResize()
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedThenDocs", () =>
+      modeController.stagedToggleThen("docs")
+    ),
+    vscode.commands.registerCommand("autocorrect.stagedThenCaveman", () =>
+      modeController.stagedToggleThen("caveman")
+    ),
     vscode.commands.registerCommand("autocorrect.stagedSetDocs", () =>
       modeController.stagedSetDocs()
     ),
@@ -254,6 +267,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         range,
         {
           op: "fix",
+          then: [],
           contextNote: "",
           tiers: cfg().defaultTiers,
           profileId: activeLlmProfile().id,

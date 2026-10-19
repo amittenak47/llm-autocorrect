@@ -34,7 +34,8 @@ export function lineFixBody(
 }
 
 export function blockFixBody(code: string, diagnostics?: string, names?: string[]): string {
-  return appendFixDetails(`Code:\n${code}`, names, diagnostics);
+  // `code` is already labelled by formatBlockWithContext ("CODE block …").
+  return appendFixDetails(code, names, diagnostics);
 }
 
 function appendFixDetails(body: string, names?: string[], diagnostics?: string): string {

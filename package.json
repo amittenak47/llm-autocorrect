@@ -137,6 +137,22 @@
         "title": "Autocorrect: Menu — Stage Line (internal)"
       },
       {
+        "command": "autocorrect.stagedResize",
+        "title": "Autocorrect: Staged — Resize block (internal)"
+      },
+      {
+        "command": "autocorrect.stagedThenDocs",
+        "title": "Autocorrect: Staged — Then docs (internal)"
+      },
+      {
+        "command": "autocorrect.stagedThenCaveman",
+        "title": "Autocorrect: Staged — Then caveman (internal)"
+      },
+      {
+        "command": "autocorrect.restageQueuedAtCursor",
+        "title": "Autocorrect: Edit Queued Item at Cursor"
+      },
+      {
         "command": "autocorrect.stagedSetDocs",
         "title": "Autocorrect: Staged — Docs flag (internal)"
       },
@@ -248,6 +264,18 @@
           "when": "false"
         },
         {
+          "command": "autocorrect.stagedResize",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedThenDocs",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedThenCaveman",
+          "when": "false"
+        },
+        {
           "command": "autocorrect.stagedSetDocs",
           "when": "false"
         },
@@ -352,6 +380,11 @@
         "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true && autocorrect.captureAdjustMode != true"
       },
       {
+        "command": "autocorrect.stagedResize",
+        "key": "s",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
         "command": "autocorrect.stagedCancel",
         "key": "escape",
         "when": "editorTextFocus && autocorrect.stagedMode == true"
@@ -389,6 +422,21 @@
       {
         "command": "autocorrect.menuKeyShiftC",
         "key": "shift+c",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.stagedThenDocs",
+        "key": "shift+d",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedThenCaveman",
+        "key": "shift+f",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.restageQueuedAtCursor",
+        "key": "r",
         "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
       },
       {
@@ -576,8 +624,8 @@
         },
         "autocorrect.prompt.examples": {
           "type": "boolean",
-          "default": true,
-          "description": "Include five short examples in the line-fix system prompt."
+          "default": false,
+          "description": "Include five short examples in the line-fix system prompt. Off by default: small local models (e.g. Granite 8B) tend to copy the examples into their reply."
         },
         "autocorrect.line.wholeStatement": {
           "type": "boolean",
@@ -589,6 +637,19 @@
           "default": "",
           "scope": "machine",
           "description": "Profile for logic review. Leave empty to use the active profile."
+        },
+        "autocorrect.staged.markerStyle": {
+          "type": "string",
+          "enum": [
+            "names",
+            "letters"
+          ],
+          "enumDescriptions": [
+            "Op names before the first staged line, e.g. \"fix → docs\".",
+            "The keys you pressed, e.g. \"✓ D\" (✓ = fix, D = docs, F = caveman)."
+          ],
+          "default": "names",
+          "description": "How staged ops are shown inline before the first staged line (context-tier digits follow either way)."
         },
         "autocorrect.logic.maxIssues": {
           "type": "number",

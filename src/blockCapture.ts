@@ -17,6 +17,8 @@ export class BlockCapture implements vscode.Disposable {
   private stagedRange: vscode.Range | undefined;
   private stagedDocUri: string | undefined;
   private readonly captureDecoration: vscode.TextEditorDecorationType;
+  private readonly stagedCleared = new vscode.EventEmitter<void>();
+  readonly onDidClearStaged = this.stagedCleared.event;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(private readonly output: vscode.OutputChannel) {
@@ -27,11 +29,13 @@ export class BlockCapture implements vscode.Disposable {
     });
     this.disposables.push(
       this.captureDecoration,
+      this.stagedCleared,
       vscode.window.onDidChangeTextEditorSelection((e) => this.onSelectionChange(e)),
       vscode.workspace.onDidChangeTextDocument((e) => this.onDocChange(e)),
       vscode.workspace.onDidCloseTextDocument((doc) => {
         if (this.recording && doc.uri.toString() === this.captureDocUri) {
           this.resetRecording();
+          this.clearStaged();
         }
         if (doc.uri.toString() === this.stagedDocUri) {
           this.clearStaged();
@@ -50,6 +54,19 @@ export class BlockCapture implements vscode.Disposable {
       `[block] keyboard capture at ${editor.document.fileName}:${this.startPosition!.line + 1}`
     );
     return true;
+  }
+
+  startResize(editor: vscode.TextEditor, range: vscode.Range): void {
+    // Keep the staged session while temporarily replacing its decoration with capture.
+    this.stagedRange = undefined;
+    this.stagedDocUri = undefined;
+    for (const visible of vscode.window.visibleTextEditors) {
+      visible.setDecorations(this.captureDecoration, []);
+    }
+    this.beginCapture(editor, new vscode.Position(range.start.line, 0), true);
+    this.headPosition = new vscode.Position(range.end.line, editor.document.lineAt(range.end.line).text.length);
+    this.syncHeadSelection(editor);
+    this.refreshCaptureDecoration(editor);
   }
 
   isKeyboardCapture(): boolean {
@@ -135,11 +152,12 @@ export class BlockCapture implements vscode.Disposable {
     for (const editor of vscode.window.visibleTextEditors) {
       editor.setDecorations(this.captureDecoration, []);
     }
+    this.stagedCleared.fire();
   }
 
-  cancelCapture(): void {
+  cancelCapture(keepSession = false): void {
     this.resetRecording();
-    this.clearStaged();
+    if (!keepSession) this.clearStaged();
     vscode.window.setStatusBarMessage("Autocorrect: capture cancelled", 3000);
     this.output.appendLine("[block] capture cancelled");
   }

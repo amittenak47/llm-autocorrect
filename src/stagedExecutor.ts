@@ -27,7 +27,9 @@ import {
   mergeCavemanComments,
   normalizeModelText,
   preserveLeadingIndent,
+  stripReplyLabels,
 } from "./responseIngress";
+import { chainLabel, runChain, StepResult } from "./stagedChain";
 import { StagedAttributes, StagedOp } from "./stagedSession";
 import { StatusBar } from "./statusBar";
 import { ApplyVerifier, snapshotDiagnostics, snapshotParserDiagnostics } from "./applyVerifier";
@@ -93,7 +95,9 @@ export class StagedExecutor {
     const llmProfile =
       this.router.profileById(attrs.profileId) ?? this.router.activeProfile;
     if (skipSecretTarget(textLf, llmProfile)) return { ok: false };
-    const queueLabel = `${attrs.op} ${blockRange.start.line + 1}-${blockRange.end.line + 1} · ${attrs.contextNote || "no ctx"}`;
+    const steps = [attrs.op, ...attrs.then];
+    const opLabel = chainLabel(attrs.op, attrs.then);
+    const queueLabel = `${opLabel} ${blockRange.start.line + 1}-${blockRange.end.line + 1} · ${attrs.contextNote || "no ctx"}`;
 
     if (queue && isDeferQueueMode()) {
       const queued = await this.queue.addPendingBlock(
@@ -105,7 +109,8 @@ export class StagedExecutor {
         attrs.op,
         attrs.contextNote,
         llmProfile.id,
-        attrs.tiers
+        attrs.tiers,
+        attrs.then
       );
       if (!queued) {
         return { ok: false };
@@ -138,10 +143,9 @@ export class StagedExecutor {
     }
 
     const assembled = this.contextAsm.assembleBlock(editor, blockRange, attrs.tiers, llmProfile);
-    const codePayload = formatBlockWithContext(textLf, assembled.supplementary);
     const c = cfg();
-    const plainFix = attrs.op === "fix" && !attrs.contextNote?.trim();
-    const names = plainFix && (c.promptIncludeNames || c.fixLocalChecks)
+    const hasPlainFix = steps.some((op, index) => op === "fix" && (index > 0 || !attrs.contextNote?.trim()));
+    const names = hasPlainFix && (c.promptIncludeNames || c.fixLocalChecks)
       ? definedNames(doc.getText().split(/\r?\n/), doc.languageId, blockRange.start.line, Number.MAX_SAFE_INTEGER) : [];
     const lspDiags = snapshotDiagnostics(doc.uri);
     const parserDiags = (parserErrors ?? []).filter((error) => !lspDiags.some((d) => d.severity === 0 &&
@@ -155,8 +159,6 @@ export class StagedExecutor {
         })),
         ...parserDiags,
       ].map((d) => ({ ...d, message: c.redactSecrets ? redactSecrets(d.message).text : d.message }))) : "";
-    const userMsg = blockFixUserMessage(codePayload, attrs.contextNote, diagnostics,
-      plainFix && c.promptIncludeNames ? names.slice(0, 60) : undefined);
 
     const lines = textLf.split("\n").length;
     const tierStr = attrs.tiers.nearby ? "" : " · minimal ctx";
@@ -166,125 +168,185 @@ export class StagedExecutor {
     );
 
     this.output.appendLine(
-      `[staged] ${attrs.op} [${llmProfile.id}] ${doc.fileName}:${blockRange.start.line + 1}-${blockRange.end.line + 1}` +
+      `[staged] ${opLabel} [${llmProfile.id}] ${doc.fileName}:${blockRange.start.line + 1}-${blockRange.end.line + 1}` +
         ` tiers=${assembled.includedTiers.join(",")}` +
         (attrs.contextNote ? ` ctx=${JSON.stringify(attrs.contextNote)}` : "")
     );
 
-    let response: string;
     let soft = false;
-    try {
-      const hasInstruction = !!attrs.contextNote?.trim();
-      const system = this.systemPrompt(attrs.op, langProfile, attrs.contextNote);
-      if (c.debug) {
-        this.output.appendLine(`[staged] prompt (system): ${system.slice(0, 3000)}`);
-        this.output.appendLine(`[staged] prompt (user): ${userMsg.slice(0, 3000)}`);
-      }
-      response = await this.statusBar.withBusy(() =>
-        this.router.complete({
-          system,
-          user: userMsg,
-          maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(textLf)),
-          signal: new AbortController().signal,
-          profileId: llmProfile.id,
-          // Instruction notes are deliberate edits (typing, renames, etc.) — not Guardian typo-judging.
-          kind: attrs.op === "fix" && !hasInstruction ? "fix" : "raw",
-          judgeOriginal: attrs.op === "fix" && !hasInstruction ? textLf : undefined,
-        })
-      );
-    } catch (err) {
-      if (err instanceof GuardianRejectedError) {
-        this.output.appendLine(`[staged] guardian rejected — logged candidate`);
-        reportOutcome("guardian rejected correction — see Output", {
-          kind: "error",
-          output: this.output,
-          statusBar: this.statusBar,
-          logPrefix: "[staged]",
-          modelText: err.candidate,
-        });
-        if (cfg().onReject === "softApply") {
-          response = err.candidate;
-          soft = true;
-        } else {
-          return { ok: false };
+    let sawUnchanged = false;
+    let lastResponse = "";
+    const generate = async (op: StagedOp, inputText: string, index: number): Promise<StepResult> => {
+      const contextNote = index === 0 ? attrs.contextNote : "";
+      const plainFix = op === "fix" && !contextNote?.trim();
+      const codePayload = formatBlockWithContext(inputText, assembled.supplementary);
+      const userMsg = blockFixUserMessage(codePayload, contextNote, index === 0 ? diagnostics : "",
+        plainFix && c.promptIncludeNames ? names.slice(0, 60) : undefined);
+      let response: string;
+      try {
+        const hasInstruction = !!contextNote?.trim();
+        const system = this.systemPrompt(op, langProfile, contextNote);
+        if (c.debug) {
+          this.output.appendLine(`[staged] prompt (system): ${system.slice(0, 3000)}`);
+          this.output.appendLine(`[staged] prompt (user): ${userMsg.slice(0, 3000)}`);
         }
-      } else {
-        const msg = err instanceof Error ? err.message : String(err);
-        reportOutcome(`failed — ${msg}`, {
-          kind: "error",
-          output: this.output,
-          statusBar: this.statusBar,
-          logPrefix: "[staged]",
-        });
-        return { ok: false };
+        response = await this.statusBar.withBusy(() =>
+          this.router.complete({
+            system,
+            user: userMsg,
+            maxTokens: effectiveMaxTokensBlock(llmProfile, blockMaxTokens(inputText)),
+            signal: new AbortController().signal,
+            profileId: llmProfile.id,
+            // Instruction notes are deliberate edits (typing, renames, etc.) — not Guardian typo-judging.
+            kind: op === "fix" && !hasInstruction ? "fix" : "raw",
+            judgeOriginal: op === "fix" && !hasInstruction ? inputText : undefined,
+          })
+        );
+      } catch (err) {
+        if (err instanceof GuardianRejectedError) {
+          this.output.appendLine(`[staged] guardian rejected — logged candidate`);
+          reportOutcome("guardian rejected correction — see Output", {
+            kind: "error",
+            output: this.output,
+            statusBar: this.statusBar,
+            logPrefix: "[staged]",
+            modelText: err.candidate,
+          });
+          if (cfg().onReject === "softApply") {
+            response = err.candidate;
+            soft = true;
+          } else {
+            return { ok: false, reason: "guardian rejected correction" };
+          }
+        } else {
+          const msg = err instanceof Error ? err.message : String(err);
+          reportOutcome(`failed — ${msg}`, {
+            kind: "error",
+            output: this.output,
+            statusBar: this.statusBar,
+            logPrefix: "[staged]",
+          });
+          return { ok: false, reason: msg };
+        }
       }
-    }
 
-    let result = normalizeModelText(response);
-    if (attrs.op === "fix" || attrs.op === "docs") {
-      result = preserveLeadingIndent(textLf, result);
-    }
-    if (attrs.op === "fix" && isUnchanged(result)) {
-      if (attrs.contextNote?.trim()) {
-        reportOutcome("model returned UNCHANGED despite context note", {
+      lastResponse = response;
+      let result = normalizeModelText(response);
+      if (op === "fix") {
+        result = stripReplyLabels(result);
+      }
+      if (op === "fix" || op === "docs") {
+        result = preserveLeadingIndent(inputText, result);
+      }
+      if (op === "fix" && isUnchanged(result)) {
+        if (contextNote?.trim() && attrs.then.length === 0) {
+          reportOutcome("model returned UNCHANGED despite context note", {
+            kind: "skip",
+            output: this.output,
+            statusBar: this.statusBar,
+            logPrefix: "[staged]",
+            modelText: response,
+          });
+          return { ok: false, reason: "model returned UNCHANGED despite context note" };
+        }
+        sawUnchanged = true;
+        return { ok: true, text: inputText };
+      }
+      if (result === inputText) return { ok: true, text: inputText };
+      if (result.trim().length === 0) {
+        reportOutcome("no changes from model", {
           kind: "skip",
           output: this.output,
           statusBar: this.statusBar,
           logPrefix: "[staged]",
           modelText: response,
         });
-        return { ok: false };
+        return { ok: false, reason: "no changes from model" };
       }
-      reportOutcome("already correct", { kind: "ok", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]" });
-      return { ok: true };
-    }
-    if (result.trim().length === 0 || result === textLf) {
-      reportOutcome("no changes from model", {
-        kind: "skip",
-        output: this.output,
-        statusBar: this.statusBar,
-        logPrefix: "[staged]",
-        modelText: response,
-      });
-      return { ok: false };
-    }
 
-    if (attrs.op === "caveman") {
-      result = alignToLineCount(result, textLf.split("\n").length, true);
-      const merged = mergeCavemanComments(textLf, result, langProfile);
-      if (!merged) {
+      if (op === "caveman") {
+        result = alignToLineCount(result, inputText.split("\n").length, true);
+        const merged = mergeCavemanComments(inputText, result, langProfile);
+        if (!merged) {
+          const action = await offerRejectRecovery(
+            "caveman rewrote code or line count — skipped",
+            result,
+            this.output
+          );
+          if (action !== "force") {
+            return { ok: false, reason: "caveman rewrote code or line count" };
+          }
+        } else {
+          result = merged;
+        }
+      }
+
+      if (op === "docs" && !docsPreservesCode(inputText, result, langProfile)) {
         const action = await offerRejectRecovery(
-          "caveman rewrote code or line count — skipped",
+          "docs altered code — skipped",
           result,
           this.output
         );
         if (action !== "force") {
-          return { ok: false };
+          return { ok: false, reason: "docs altered code" };
         }
-      } else {
-        result = merged;
       }
-    }
 
-    if (attrs.op === "docs" && !docsPreservesCode(textLf, result, langProfile)) {
-      const action = await offerRejectRecovery(
-        "docs altered code — skipped",
-        result,
-        this.output
-      );
-      if (action !== "force") {
-        return { ok: false };
+      if (plainFix && c.fixLocalChecks) {
+        const check = checkFix({ original: inputText, corrected: result, languageId: doc.languageId,
+          fileNames: new Set(names), builtins: builtinNames(doc.languageId) });
+        if (!check.ok) {
+          this.output.appendLine(`[staged] local check rejected (${check.reason})\n${result.slice(0, 800)}`);
+          vscode.window.setStatusBarMessage(`Autocorrect: skipped fix — ${check.reason}`, 4000);
+          return { ok: false, reason: check.reason ?? "local check rejected" };
+        }
       }
-    }
 
-    if (plainFix && c.fixLocalChecks) {
-      const check = checkFix({ original: textLf, corrected: result, languageId: doc.languageId,
-        fileNames: new Set(names), builtins: builtinNames(doc.languageId) });
-      if (!check.ok) {
-        this.output.appendLine(`[staged] local check rejected (${check.reason})\n${result.slice(0, 800)}`);
-        vscode.window.setStatusBarMessage(`Autocorrect: skipped fix — ${check.reason}`, 4000);
-        return { ok: false };
+      const inLines = inputText.split("\n").length;
+      const outLines = result.split("\n").length;
+      // Local models sometimes paste the whole prompt context into the block.
+      if (
+        op === "fix" &&
+        outLines > Math.max(inLines * 2, inLines + 4)
+      ) {
+        const choice = await vscode.window.showWarningMessage(
+          `Model expanded the block from ${inLines} to ${outLines} lines. Apply this large replace?`,
+          { modal: true },
+          "Apply"
+        );
+        if (choice !== "Apply") {
+          reportOutcome(`skipped large expansion (${inLines} → ${outLines} lines)`, {
+            kind: "skip",
+            output: this.output,
+            statusBar: this.statusBar,
+            logPrefix: "[staged]",
+            modelText: result,
+          });
+          return { ok: false, reason: `skipped large expansion (${inLines} \u2192 ${outLines} lines)` };
+        }
       }
+
+      return { ok: true, text: result };
+    };
+    const chained = await runChain(steps, textLf, generate);
+    if (!chained.ok) {
+      if (attrs.then.length > 0) {
+        reportOutcome(`step ${chained.failedStep + 1} (${chained.op}) failed \u2014 ${chained.reason}; nothing applied`, {
+          kind: "error", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]",
+        });
+      }
+      return { ok: false };
+    }
+    const result = chained.text;
+    if (result === textLf) {
+      if (sawUnchanged) {
+        reportOutcome("already correct", { kind: "ok", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]" });
+        return { ok: true };
+      }
+      reportOutcome("no changes from model", {
+        kind: "skip", output: this.output, statusBar: this.statusBar, logPrefix: "[staged]", modelText: lastResponse,
+      });
+      return { ok: false };
     }
 
     if (doc.isClosed || doc.getText(blockRange) !== text) {
@@ -303,28 +365,6 @@ export class StagedExecutor {
       this.output.appendLine(`[staged] line count ${inLines} → ${outLines} (block replace)`);
     }
 
-    // Local models sometimes paste the whole prompt context into the block.
-    if (
-      attrs.op === "fix" &&
-      outLines > Math.max(inLines * 2, inLines + 4)
-    ) {
-      const choice = await vscode.window.showWarningMessage(
-        `Model expanded the block from ${inLines} to ${outLines} lines. Apply this large replace?`,
-        { modal: true },
-        "Apply"
-      );
-      if (choice !== "Apply") {
-        reportOutcome(`skipped large expansion (${inLines} → ${outLines} lines)`, {
-          kind: "skip",
-          output: this.output,
-          statusBar: this.statusBar,
-          logPrefix: "[staged]",
-          modelText: result,
-        });
-        return { ok: false };
-      }
-    }
-
     if (queue) {
       const queued = await this.queue.addBlock(
         doc,
@@ -336,7 +376,8 @@ export class StagedExecutor {
         attrs.op,
         attrs.contextNote,
         llmProfile.id,
-        attrs.tiers
+        attrs.tiers,
+        attrs.then
       );
       if (!queued) {
         return { ok: false };
@@ -351,9 +392,9 @@ export class StagedExecutor {
       return { ok: true, queued: true };
     }
 
-    const beforeParser = c.verifyAfterApply && attrs.op === "fix" && !fromQueue
+    const beforeParser = c.verifyAfterApply && steps.includes("fix") && !fromQueue
       ? await snapshotParserDiagnostics(doc, this.syntaxChecker) : undefined;
-    const beforeDiags = c.verifyAfterApply && attrs.op === "fix" && !fromQueue ? snapshotDiagnostics(doc.uri) : undefined;
+    const beforeDiags = c.verifyAfterApply && steps.includes("fix") && !fromQueue ? snapshotDiagnostics(doc.uri) : undefined;
     const applied = await this.queue.applyChange(
       doc,
       blockRange.start.line,
@@ -377,7 +418,7 @@ export class StagedExecutor {
           0
         )
       );
-      reportOutcome(soft ? "soft-applied rejected fix (revert at cursor)" : `${attrs.op} applied`, {
+      reportOutcome(soft ? "soft-applied rejected fix (revert at cursor)" : `${opLabel} applied`, {
         kind: "ok",
         output: this.output,
         statusBar: this.statusBar,

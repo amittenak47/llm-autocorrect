@@ -123,3 +123,34 @@ describe("inserted documentation blocks cannot swallow code", () => {
       'def f():\n    """Doc.\n    """\n    return 42', python), true);
   });
 });
+
+describe("stripReplyLabels", () => {
+  it("removes labels a model copied from the prompt", async () => {
+    const { stripReplyLabels, modelLines, fixForSingleLineTarget } = await import("../../out/responseIngress.js");
+    // The exact reply seen from Granite 4.1 8B in manual testing.
+    assert.equal(stripReplyLabels("REPLY: \n    return len(items)"), "    return len(items)");
+    assert.equal(stripReplyLabels("    totl = 0\n\nCorrection:\n    total = 0"), "    total = 0");
+    assert.equal(stripReplyLabels("REPLY: print(x)"), "print(x)");
+    assert.equal(stripReplyLabels('TARGET: pritn("hi") => REPLY: print("hi")'), 'print("hi")');
+    assert.equal(stripReplyLabels("->  print(x)"), "print(x)");
+    assert.equal(stripReplyLabels("REPLY: UNCHANGED"), "UNCHANGED");
+    assert.deepEqual(modelLines("REPLY: UNCHANGED"), []);
+    assert.equal(fixForSingleLineTarget(modelLines("REPLY: \n    return len(items)")), "    return len(items)");
+  });
+
+  it("leaves real code alone", async () => {
+    const { stripReplyLabels } = await import("../../out/responseIngress.js");
+    for (const code of ["answer: int = 5", "result: list[int] = []", "    output = run()", "def reply(x):", "x = a -> b", "Output = 3"]) {
+      assert.equal(stripReplyLabels(code), code, code);
+    }
+  });
+});
+
+describe("stripReplyLabels for block replies", () => {
+  it("drops a CODE: label line seen from Granite on a block fix", async () => {
+    const { stripReplyLabels } = await import("../../out/responseIngress.js");
+    assert.equal(stripReplyLabels("CODE:\ndef f():\n    return 1"), "def f():\n    return 1");
+    assert.equal(stripReplyLabels("CODE BLOCK:\nx = 1"), "x = 1");
+    assert.equal(stripReplyLabels("CODE = 3"), "CODE = 3");
+  });
+});

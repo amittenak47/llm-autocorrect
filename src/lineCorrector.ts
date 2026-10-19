@@ -16,6 +16,7 @@ import {
   modelLines,
   normalizeModelText,
   preserveLeadingIndent,
+  stripReplyLabels,
 } from "./responseIngress";
 import { formatDiagnosticsForLine, lineFixExamples } from "./diagPrompt";
 import { builtinNames, definedNames } from "./fileNames";
@@ -499,10 +500,13 @@ export class LineCorrector implements vscode.Disposable {
         `preserving leading indentation on the first line. ` +
         `You may add lines after the target when required to fix syntax (e.g. a missing closing bracket). ` +
         `If the line is already correct, reply with exactly: UNCHANGED\n` +
-        `Never add explanations, quotes, or code fences. ` +
+        `Never add explanations, quotes, code fences, or labels such as "REPLY:" or "Correction:" — reply with the code only. ` +
         `Never rewrite working code stylistically — fix mistakes only. ` +
-        `If diagnostics are listed, they come from the language server and usually point at the real mistake; fix that mistake.` +
-        (c.promptExamples ? `\n\nExamples:\n${lineFixExamples(doc.languageId)}` : "");
+        `If diagnostics are listed, they come from the language server and usually point at the real mistake; fix that mistake. ` +
+        `Fix only the TARGET ${multiline ? "lines" : "line"} — diagnostics on other lines are context, never a reason to rewrite another line.` +
+        (c.promptExamples
+          ? `\n\nExamples (broken line -> your entire reply):\n${lineFixExamples(doc.languageId)}`
+          : "");
 
       let response: string;
       try {
@@ -525,7 +529,7 @@ export class LineCorrector implements vscode.Disposable {
             this.output.appendLine(`[line] guardian rejected — logged candidate`);
             this.output.appendLine(`[line] candidate:\n${err.candidate.slice(0, 1200)}`);
             if (cfg().onReject === "softApply") {
-              if (isUnchanged(normalizeModelText(err.candidate))) {
+              if (isUnchanged(stripReplyLabels(normalizeModelText(err.candidate)))) {
                 return noOp();
               }
               const corrected = preserveLeadingIndent(
@@ -574,7 +578,8 @@ export class LineCorrector implements vscode.Disposable {
       }
 
       // Parse model output; accept multi-line fixes for a single-line target.
-      const raw = normalizeModelText(response);
+      // "REPLY: UNCHANGED" counts as UNCHANGED; labels never reach the buffer.
+      const raw = stripReplyLabels(normalizeModelText(response));
       if (isUnchanged(raw)) {
         this.log(`line ${line + 1}: model returned UNCHANGED`);
         return noOp();

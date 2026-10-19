@@ -10,6 +10,7 @@ import {
 import { CLOUD_DEFAULT_TIMEOUT_MS, LOCAL_DEFAULT_TIMEOUT_MS, isLocalBaseUrl } from "./localUrl";
 import { LlmClient } from "./llm";
 import { capMaxTokens } from "./promptLimits";
+import { normalizeModelText, stripReplyLabels } from "./responseIngress";
 import { effectiveProfileTimeout, LlmProfileConfig } from "./profiles";
 import { ProfileConcurrency } from "./profileConcurrency";
 
@@ -91,7 +92,9 @@ export class LlmRouter {
         return last;
       }
 
-      const score = await this.judge(req.judgeOriginal!, last, req.signal);
+      // Judge the code the user would get, not labels the model wrapped around it.
+      const candidate = kind === "fix" ? stripReplyLabels(normalizeModelText(last)) : last;
+      const score = await this.judge(req.judgeOriginal!, candidate, req.signal);
       this.output?.appendLine(
         `[guardian] attempt ${attempt}/${maxAttempts} → ${score ?? "unparsed"}`
       );

@@ -1,37 +1,39 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
 import { profileColor } from "./profiles";
-import { StagedAttributes } from "./stagedSession";
+import { opMarkerTexts } from "./stageBadge";
+import { StagedAttributes, StagedOp } from "./stagedSession";
 
-const OP_COLORS: Record<string, string> = {
-  fix: "rgba(74, 158, 255, 0.35)",
-  docs: "rgba(167, 139, 250, 0.35)",
-  caveman: "rgba(251, 146, 60, 0.35)",
-};
-
-const OP_GUTTER_HEX: Record<string, string> = {
+/** Op marker colours. */
+const OP_COLORS: Record<StagedOp, string> = {
   fix: "#4a9eff",
   docs: "#a78bfa",
   caveman: "#fb923c",
 };
 
-function gutterDotUri(hex: string): vscode.Uri {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="5" fill="${hex}"/></svg>`;
-  return vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
-}
-
 const TIER_COLORS = [
-  "rgba(45, 212, 191, 0.5)",
-  "rgba(96, 165, 250, 0.5)",
-  "rgba(244, 114, 182, 0.5)",
-  "rgba(250, 204, 21, 0.5)",
-  "rgba(148, 163, 184, 0.5)",
+  "rgba(45, 212, 191, 0.9)",
+  "rgba(96, 165, 250, 0.9)",
+  "rgba(244, 114, 182, 0.9)",
+  "rgba(250, 204, 21, 0.9)",
+  "rgba(148, 163, 184, 0.9)",
 ];
 
+const TIER_NAMES = ["nearby", "signature", "recent edits", "open tabs", "selection"];
+
+/** A chain has at most three steps (main op + two follow-ups). */
+const MAX_OPS = 3;
+
+/**
+ * Staged-block markers, drawn horizontally before the first staged line so a whole chain is visible:
+ * the ops in run order ("fix → docs", or "✓ D" with `staged.markerStyle: "letters"`), then the active
+ * context-tier digits. The left border colour is the LLM profile.
+ */
 export class StageDecorations implements vscode.Disposable {
-  private borderDeco: vscode.TextEditorDecorationType | undefined;
-  private opDeco: vscode.TextEditorDecorationType | undefined;
   private readonly profileBorder: vscode.TextEditorDecorationType;
+  private borderDeco: vscode.TextEditorDecorationType | undefined;
+  // Decoration types render their `before` content in creation order: ops first, then tiers.
+  private readonly opMarks: vscode.TextEditorDecorationType[] = [];
   private readonly tierMarks: vscode.TextEditorDecorationType[] = [];
   private stagedRange: vscode.Range | undefined;
   private stagedUri: string | undefined;
@@ -43,13 +45,20 @@ export class StageDecorations implements vscode.Disposable {
       borderWidth: "0 0 0 4px",
       borderStyle: "solid",
     });
+    for (let i = 0; i < MAX_OPS; i++) {
+      this.opMarks.push(
+        vscode.window.createTextEditorDecorationType({
+          before: { margin: "0 0.35em 0 0", fontWeight: "bold" },
+        })
+      );
+    }
     for (let i = 0; i < 5; i++) {
       this.tierMarks.push(
         vscode.window.createTextEditorDecorationType({
           before: {
             contentText: String(i + 1),
             color: TIER_COLORS[i],
-            margin: "0 0.2em 0 0",
+            margin: i === 0 ? "0 0.2em 0 0.3em" : "0 0.2em 0 0",
             fontWeight: "bold",
           },
         })
@@ -75,25 +84,32 @@ export class StageDecorations implements vscode.Disposable {
     this.paint();
   }
 
+  /** Repaint with current settings (e.g. after `staged.markerStyle` changes). */
+  refresh(): void {
+    this.paint();
+  }
+
+  private clearEditor(editor: vscode.TextEditor): void {
+    editor.setDecorations(this.profileBorder, []);
+    for (const d of [...this.opMarks, ...this.tierMarks]) {
+      editor.setDecorations(d, []);
+    }
+  }
+
   private paint(): void {
     this.borderDeco?.dispose();
-    this.opDeco?.dispose();
     this.borderDeco = undefined;
-    this.opDeco = undefined;
     for (const editor of vscode.window.visibleTextEditors) {
       const uri = editor.document.uri.toString();
       if (uri !== this.stagedUri || !this.stagedRange || !this.attrs) {
-        editor.setDecorations(this.profileBorder, []);
-        for (const d of this.tierMarks) {
-          editor.setDecorations(d, []);
-        }
+        this.clearEditor(editor);
         continue;
       }
       const profiles = cfg().profiles;
       const pIdx = profiles.findIndex((p) => p.id === this.attrs!.profileId);
       const prof = profiles[pIdx] ?? profiles[0];
       const color = profileColor(prof, Math.max(0, pIdx));
-      const borderDeco: vscode.TextEditorDecorationType = this.borderDeco ?? vscode.window.createTextEditorDecorationType({
+      const borderDeco = vscode.window.createTextEditorDecorationType({
         isWholeLine: true,
         borderWidth: "0 0 0 4px",
         borderStyle: "solid",
@@ -106,40 +122,37 @@ export class StageDecorations implements vscode.Disposable {
       editor.setDecorations(borderDeco, lines);
       this.borderDeco = borderDeco;
 
-      const opColor = OP_COLORS[this.attrs.op] ?? OP_COLORS.fix;
-      const opHex = OP_GUTTER_HEX[this.attrs.op] ?? OP_GUTTER_HEX.fix;
-      const opDeco: vscode.TextEditorDecorationType = this.opDeco ?? vscode.window.createTextEditorDecorationType({
-        gutterIconPath: gutterDotUri(opHex),
-        gutterIconSize: "75%",
-        before: {
-          contentText: "$(circle-filled)",
-          color: opColor.replace("0.35", "1"),
-          margin: "0 1ch 0 0",
-          fontWeight: "bold",
-        },
-      });
-      editor.setDecorations(opDeco, [new vscode.Range(this.stagedRange.start.line, 0, this.stagedRange.start.line, 0)]);
-      this.opDeco = opDeco;
-
+      const first = new vscode.Range(this.stagedRange.start.line, 0, this.stagedRange.start.line, 0);
+      const ops = [this.attrs.op, ...(this.attrs.then ?? [])];
+      const texts = opMarkerTexts(ops, cfg().stagedMarkerStyle);
       const tiers = this.attrs.tiers;
       const tierList = [tiers.nearby, tiers.signature, tiers.recentEdits, tiers.openTabs, tiers.yank];
+      const activeTiers = tierList.map((on, i) => (on ? `${i + 1} ${TIER_NAMES[i]}` : "")).filter(Boolean);
+      const hover = new vscode.MarkdownString(
+        `**Staged:** ${ops.join(" → ")} · profile ${prof?.label ?? this.attrs.profileId}\n\n` +
+          `Context tiers: ${activeTiers.join(", ") || "none"}` +
+          (this.attrs.contextNote ? `\n\nInstruction (X): ${this.attrs.contextNote}` : "")
+      );
+      for (let i = 0; i < MAX_OPS; i++) {
+        const op = ops[i];
+        editor.setDecorations(this.opMarks[i], op
+          ? [{
+            range: first,
+            hoverMessage: i === 0 ? hover : undefined,
+            renderOptions: { before: { contentText: texts[i], color: OP_COLORS[op] } },
+          }]
+          : []);
+      }
       for (let i = 0; i < 5; i++) {
-        if (tierList[i]) {
-          editor.setDecorations(this.tierMarks[i], [
-            new vscode.Range(this.stagedRange.start.line, 0, this.stagedRange.start.line, 0),
-          ]);
-        } else {
-          editor.setDecorations(this.tierMarks[i], []);
-        }
+        editor.setDecorations(this.tierMarks[i], tierList[i] ? [first] : []);
       }
     }
   }
 
   dispose(): void {
     this.borderDeco?.dispose();
-    this.opDeco?.dispose();
     this.profileBorder.dispose();
-    for (const d of this.tierMarks) {
+    for (const d of [...this.opMarks, ...this.tierMarks]) {
       d.dispose();
     }
   }

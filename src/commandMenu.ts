@@ -13,6 +13,7 @@ const ITEMS: MenuItem[] = [
   { label: "/doc", description: "Docstrings & comments", command: "autocorrect.documentBlock" },
   { label: "/caveman", description: "Ultra-short inline comments", command: "autocorrect.cavemanComment" },
   { label: "/context", description: "Staged context note (enter menu + stage first)", command: "autocorrect.stagedSetContext" },
+  { label: "/edit-queued", description: "Edit Queued Item at Cursor", command: "autocorrect.restageQueuedAtCursor" },
   { label: "/queue", description: "Review queued fixes (all profiles)", command: "autocorrect.reviewQueuedFixes" },
   { label: "/translate", description: "Translate selection", command: "autocorrect.translateSelection" },
 ];

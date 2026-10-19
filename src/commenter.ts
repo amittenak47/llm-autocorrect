@@ -71,6 +71,7 @@ export class Commenter {
       range,
       {
         op,
+        then: [],
         contextNote: "",
         tiers: tiersForOp(op, cfg().defaultTiers),
         profileId: activeLlmProfile().id,

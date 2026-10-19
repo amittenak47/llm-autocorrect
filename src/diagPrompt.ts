@@ -47,5 +47,6 @@ export function lineFixExamples(languageId: string): string {
     ["cosnt n = 1;", "const n = 1;"],
     ["int total = a + b;", "UNCHANGED"],
   ];
-  return examples.map(([target, reply]) => `TARGET: ${target} => REPLY: ${reply}`).join("\n");
+  // No "TARGET:"/"REPLY:" labels: small models copy them into their answer.
+  return examples.map(([target, reply]) => `${target}  ->  ${reply}`).join("\n");
 }

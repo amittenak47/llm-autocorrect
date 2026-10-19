@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { DEFAULT_EXCLUDE_GLOBS } from "./privacySettings";
+import type { MarkerStyle } from "./stageBadge";
 import {
   ContextTiers,
   DEFAULT_CONTEXT_TIERS,
@@ -71,11 +72,12 @@ function readConfig() {
     maxLineChars: c.get<number>("line.maxLineChars", 200),
     promptIncludeDiagnostics: c.get<boolean>("prompt.includeDiagnostics", true),
     promptIncludeNames: c.get<boolean>("prompt.includeNames", true),
-    promptExamples: c.get<boolean>("prompt.examples", true),
+    promptExamples: c.get<boolean>("prompt.examples", false),
     lineWholeStatement: c.get<boolean>("line.wholeStatement", true),
     fixLocalChecks: c.get<boolean>("fix.localChecks", true),
     logicProfileId: c.get<string>("logic.profileId", ""),
     logicMaxIssues: c.get<number>("logic.maxIssues", 5),
+    stagedMarkerStyle: c.get<MarkerStyle>("staged.markerStyle", "names"),
     promptPrefix: c.get<string>("prompt.prefix", ""),
     excludeGlobs: [...c.get<string[]>("context.excludeGlobs", DEFAULT_EXCLUDE_GLOBS)],
     redactSecrets: c.get<boolean>("privacy.redactSecrets", true),

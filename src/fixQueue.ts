@@ -25,6 +25,7 @@ import {
   shiftRegion,
 } from "./regionLock";
 import { ContextTiers } from "./profiles";
+import { chainLabel } from "./stagedChain";
 import { StagedOp } from "./stagedSession";
 import { StatusBar } from "./statusBar";
 import { QueueExecutor } from "./queueExecutor";
@@ -37,6 +38,7 @@ export interface QueuedFix {
   original: string;
   corrected: string;
   op: StagedOp;
+  then: StagedOp[];
   contextNote: string;
   profileId: string;
   tiers: ContextTiers;
@@ -125,9 +127,10 @@ export class FixQueue implements vscode.Disposable {
     op: StagedOp,
     contextNote: string,
     profileId?: string,
-    tiers = cfg().defaultTiers
+    tiers = cfg().defaultTiers,
+    then: StagedOp[] = []
   ): Promise<boolean> {
-    return this.add(doc, startLine, endLine, original, corrected, label, op, contextNote, profileId ?? activeLlmProfile().id, tiers, false);
+    return this.add(doc, startLine, endLine, original, corrected, label, op, contextNote, profileId ?? activeLlmProfile().id, tiers, false, then);
   }
 
   async addPendingBlock(
@@ -139,9 +142,10 @@ export class FixQueue implements vscode.Disposable {
     op: StagedOp,
     contextNote: string,
     profileId: string,
-    tiers: ContextTiers
+    tiers: ContextTiers,
+    then: StagedOp[] = []
   ): Promise<boolean> {
-    return this.add(doc, startLine, endLine, original, "", label, op, contextNote, profileId, tiers, true);
+    return this.add(doc, startLine, endLine, original, "", label, op, contextNote, profileId, tiers, true, then);
   }
 
   /** Apply a surgical replace with per-file serialization and revert ledger entry. */
@@ -182,6 +186,29 @@ export class FixQueue implements vscode.Disposable {
     });
   }
 
+  takeAtCursor(editor: vscode.TextEditor): QueuedFix | undefined {
+    const doc = editor.document;
+    const fix = this.fixes.find((f) => f.uri === doc.uri.toString() &&
+      regionContainsLine(normalizeRegion(f.line, f.endLine), editor.selection.active.line));
+    if (!fix) {
+      vscode.window.setStatusBarMessage("Autocorrect: no queued item at cursor", 3000);
+      return undefined;
+    }
+    const range = this.fixRange(doc, fix);
+    if (!range || doc.getText(range) !== fix.original) {
+      vscode.window.setStatusBarMessage("Autocorrect: queued item no longer matches the buffer", 4000);
+      return undefined;
+    }
+    this.fixes = this.fixes.filter((f) => f !== fix);
+    this.sync();
+    return fix;
+  }
+
+  restore(fix: QueuedFix): void {
+    if (!this.fixes.includes(fix)) this.fixes.push(fix);
+    this.sync();
+  }
+
   async removeAtCursor(editor: vscode.TextEditor): Promise<void> {
     const doc = editor.document;
     const uri = doc.uri.toString();
@@ -194,7 +221,7 @@ export class FixQueue implements vscode.Disposable {
       this.fixes = this.fixes.filter((f) => f !== fix);
       this.sync();
       vscode.window.setStatusBarMessage(
-        `Autocorrect: removed queued ${fix.op} (${fix.label})`,
+        `Autocorrect: removed queued ${chainLabel(fix.op, fix.then)} (${fix.label})`,
         4000
       );
       this.output.appendLine(`[queue] removed ${fix.label} at cursor`);
@@ -231,7 +258,8 @@ export class FixQueue implements vscode.Disposable {
     contextNote: string,
     profileId: string,
     tiers: ContextTiers,
-    pending: boolean
+    pending: boolean,
+    then: StagedOp[] = []
   ): Promise<boolean> {
     const uri = doc.uri.toString();
     const region = normalizeRegion(startLine, endLine);
@@ -280,6 +308,7 @@ export class FixQueue implements vscode.Disposable {
         return this.mergeInto(doc, queueMerge, region, {
           label,
           op,
+          then,
           contextNote,
           profileId,
           tiers,
@@ -323,6 +352,7 @@ export class FixQueue implements vscode.Disposable {
       original,
       corrected,
       op,
+      then: [...then],
       contextNote,
       profileId,
       tiers: { ...tiers },
@@ -351,6 +381,7 @@ export class FixQueue implements vscode.Disposable {
     next: {
       label: string;
       op: StagedOp;
+      then: StagedOp[];
       contextNote: string;
       profileId: string;
       tiers: ContextTiers;
@@ -368,6 +399,7 @@ export class FixQueue implements vscode.Disposable {
     existing.baselineHash = baselineHash(original);
     existing.label = next.label;
     existing.op = next.op;
+    existing.then = [...next.then];
     existing.contextNote = next.contextNote;
     existing.tiers = { ...next.tiers };
     existing.pending = true;
@@ -436,7 +468,7 @@ export class FixQueue implements vscode.Disposable {
     const items: QueueQuickPickItem[] = pool.map((f) => {
       const pl = profiles.find((p) => p.id === f.profileId);
       return {
-        label: `$(play) ${shortName(f.fileName)} — ${f.op} [${pl?.label ?? f.profileId}]`,
+        label: `$(play) ${shortName(f.fileName)} — ${chainLabel(f.op, f.then)} [${pl?.label ?? f.profileId}]`,
         description: taskDescription(f),
         detail: taskDetail(f),
         picked: true,
@@ -498,7 +530,7 @@ export class FixQueue implements vscode.Disposable {
     const items: QueueQuickPickItem[] = pool.map((f) => {
       const pl = profiles.find((p) => p.id === f.profileId);
       return {
-        label: `$(edit) ${shortName(f.fileName)} — ${f.op} [${pl?.label ?? f.profileId}]`,
+        label: `$(edit) ${shortName(f.fileName)} — ${chainLabel(f.op, f.then)} [${pl?.label ?? f.profileId}]`,
         description: changeDescription(f),
         detail: changeDetail(f),
         picked: true,

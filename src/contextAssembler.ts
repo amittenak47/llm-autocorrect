@@ -259,9 +259,12 @@ export class ContextAssemblerService implements vscode.Disposable {
 }
 
 /** Format block supplementary context for LLM user message. */
+/** Block prompt payload: read-only context first, then the one block the model may return. */
 export function formatBlockWithContext(target: string, supplementary: string): string {
+  // Label both parts: small models otherwise treat the context as code to fix and paste it into the reply.
+  const block = `CODE block (reply with only this block):\n${target}`;
   if (!supplementary.trim()) {
-    return target;
+    return block;
   }
-  return `${supplementary}\n\n--- Code ---\n${target}`;
+  return `Context (read-only — never include it in your reply):\n${supplementary}\n\n${block}`;
 }

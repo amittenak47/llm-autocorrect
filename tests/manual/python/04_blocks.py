@@ -69,3 +69,16 @@ class Reporter:
         pritn(message)
         return message
 outside_selection = "leave this line unchanged"
+
+
+# 6. RESIZE KEEPING FLAGS: stage case 2, D, X ("add a docstring"), toggle 2, M.
+# Press S, W/S to resize, E: op/note/tiers/profile remain. S then Esc restores
+# the old range and flags. Esc clears; reopen menu then S starts a new selection.
+
+# 7. EDIT QUEUED OP: stage case 2, D, Shift+E. Cursor inside it, menu -> R
+# (or Edit Queued Item at Cursor), F, Shift+E: replaces queued docs with caveman.
+# Repeat R then Esc: original item returns. Try pending and ready queue modes.
+
+# 8. FIX THEN DOCS: on a fresh case 1 (report_sum typos), stage -> Shift+D -> E.
+# Expect all four typos fixed AND a docstring added in ONE apply. Run Remove or
+# Revert at Cursor once: entire original typo block returns. A failed step applies nothing.
