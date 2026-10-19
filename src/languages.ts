@@ -54,7 +54,7 @@ export function detectLanguage(text: string): DetectedLanguage | undefined {
 
   // C / C++
   if (/#include\s*[<"]/.test(text)) { scores.c += 3; scores.cpp += 3; }
-  if (/\bstd::|::\s*\w+|\bcout\b|\bcin\b|\btemplate\s*</.test(text)) scores.cpp += 4;
+  if (/\bstd::|\b[A-Za-z_]\w*::[A-Za-z_]\w*|\bcout\b|\bcin\b|\btemplate\s*</.test(text)) scores.cpp += 4;
   if (/\bint\s+main\s*\(/.test(text)) { scores.c += 2; scores.cpp += 2; }
   if (/\b(printf|malloc|free)\s*\(/.test(text)) scores.c += 2;
   if (/\bfor\s*\(\s*(int|size_t|auto)\s+\w+\s*=/.test(text)) { scores.cpp += 2; scores.c += 1; }

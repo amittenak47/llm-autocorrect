@@ -1,10 +1,16 @@
 /** Limits concurrent async work (per-profile LLM pools use this). */
 export class Semaphore {
-  private slots: number;
+  private max: number;
+  private inUse = 0;
   private readonly waiters: Array<() => void> = [];
 
   constructor(max: number) {
-    this.slots = Math.max(1, max);
+    this.max = Math.max(1, max);
+  }
+
+  setMax(n: number): void {
+    this.max = Math.max(1, n);
+    this.wakeWaiters();
   }
 
   async use<T>(fn: () => Promise<T>): Promise<T> {
@@ -17,19 +23,22 @@ export class Semaphore {
   }
 
   private acquire(): Promise<void> {
-    if (this.slots > 0) {
-      this.slots--;
+    if (this.inUse < this.max) {
+      this.inUse++;
       return Promise.resolve();
     }
     return new Promise((resolve) => this.waiters.push(resolve));
   }
 
   private release(): void {
-    const next = this.waiters.shift();
-    if (next) {
-      next();
-      return;
+    this.inUse--;
+    this.wakeWaiters();
+  }
+
+  private wakeWaiters(): void {
+    while (this.inUse < this.max && this.waiters.length > 0) {
+      this.inUse++;
+      this.waiters.shift()!();
     }
-    this.slots++;
   }
 }

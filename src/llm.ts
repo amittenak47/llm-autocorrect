@@ -1,16 +1,20 @@
 import * as vscode from "vscode";
-import { activeLlmProfile, cfg } from "./config";
+import { cfg } from "./config";
 import {
   parseAnthropicResponse,
   parseGeminiResponse,
   parseOpenAiChatResponse,
   ParsedLlmResponse,
+  isTruncatedFinish,
+  TruncatedResponseError,
 } from "./llmResponse";
+import { endpointFingerprint, secretKeyBindingForProfile } from "./endpointFingerprint";
 import { capMaxTokens } from "./promptLimits";
 import { effectiveReasoningMode, LlmProfileConfig } from "./profiles";
 import { buildReasoningExtras } from "./reasoningParams";
 import { stripFences } from "./textUtils";
 
+export { TruncatedResponseError, isTruncatedFinish } from "./llmResponse";
 export { stripFences } from "./textUtils";
 
 export interface LlmRequest {
@@ -33,7 +37,7 @@ export function secretKeyFor(provider: string): string {
   return `autocorrect.apiKey.${provider}`;
 }
 
-export function secretKeyForProfile(profileId: string, provider: string): string {
+export function secretKeyForProfile(profileId: string): string {
   return `autocorrect.apiKey.${profileId}`;
 }
 
@@ -46,12 +50,6 @@ export class LlmClient {
     this.output = output;
   }
 
-  /** Legacy single-provider path. */
-  async complete(req: LlmRequest): Promise<string> {
-    const profile = activeLlmProfile();
-    return this.completeForProfile(profile, req);
-  }
-
   async completeForProfile(profile: LlmProfileConfig, req: LlmRequest): Promise<string> {
     const model = profile.model || PROVIDER_DEFAULTS[profile.provider]?.model;
     if (!model) {
@@ -59,9 +57,21 @@ export class LlmClient {
         `No model configured for profile "${profile.id}" — set model in autocorrect.profiles.`
       );
     }
-    const apiKey =
-      (await this.secrets.get(secretKeyForProfile(profile.id, profile.provider))) ??
-      (await this.secrets.get(secretKeyFor(profile.provider)));
+    const profileKey = await this.secrets.get(secretKeyForProfile(profile.id));
+    if (profileKey) {
+      const bindingKey = secretKeyBindingForProfile(profile.id);
+      const binding = await this.secrets.get(bindingKey);
+      const fingerprint = endpointFingerprint(profile);
+      if (binding !== undefined && binding !== fingerprint) {
+        throw new Error(`API key for profile "${profile.id}" was saved for a different endpoint (${binding}) — run "Autocorrect: Set API Key" again.`);
+      }
+      if (binding === undefined) {
+        await this.secrets.store(bindingKey, fingerprint);
+      }
+    }
+    const apiKey = profileKey ?? (profile.provider === "openai-compatible"
+      ? undefined
+      : await this.secrets.get(secretKeyFor(profile.provider)));
     if (!apiKey && profile.provider !== "openai-compatible") {
       throw new Error(`No API key for profile "${profile.id}". Run "Autocorrect: Set API Key".`);
     }
@@ -130,6 +140,9 @@ export class LlmClient {
 
   private finishParsed(profile: LlmProfileConfig, parsed: ParsedLlmResponse): string {
     this.emitReasoning(profile, parsed);
+    if (isTruncatedFinish(parsed.finishReason)) {
+      throw new TruncatedResponseError(profile.id);
+    }
     return parsed.content;
   }
 

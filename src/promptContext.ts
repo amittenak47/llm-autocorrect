@@ -1,5 +1,5 @@
 import { cfg } from "./config";
-import { formatUserContext, formatUserInstruction, mergedContextNotes } from "./promptMerge";
+import { blockFixBody, lineFixBody, formatUserContext, formatUserInstruction, mergedContextNotes } from "./promptMerge";
 
 export { mergedContextNotes, formatUserContext, formatUserInstruction } from "./promptMerge";
 
@@ -16,17 +16,16 @@ export function withUserContext(body: string, sessionNote?: string): string {
   return formatUserContext(body, sessionContext(sessionNote));
 }
 
-export function lineFixUserMessage(contextLines: string, targetLine: string): string {
-  const body =
-    `Context (lines above the target):\n${contextLines || "(start of file)"}\n\n` +
-    `TARGET line:\n${targetLine}`;
-  return withUserContext(body);
+export function lineFixUserMessage(
+  contextLines: string, targetLine: string, diagnostics?: string, names?: string[], multiline = false
+): string {
+  return withUserContext(lineFixBody(contextLines, targetLine, diagnostics, names, multiline));
 }
 
-export function blockFixUserMessage(code: string, sessionNote?: string): string {
+export function blockFixUserMessage(code: string, sessionNote?: string, diagnostics?: string, names?: string[]): string {
   const global = globalPromptPrefix();
   const note = sessionNote?.trim() ?? "";
-  let body = `Code:\n${code}`;
+  let body = blockFixBody(code, diagnostics, names);
   if (note) {
     body = formatUserInstruction(body, note);
   }

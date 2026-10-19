@@ -42,3 +42,13 @@ describe("detectLanguage", () => {
     assert.equal(r?.profile.id, "cpp");
   });
 });
+
+describe("slice and namespace detection", () => {
+  it("does not detect Python slice strides as C++ namespaces", () => {
+    assert.notEqual(detectLanguage("evens = nums[::2]\nodds = nums[1::2]\n")?.profile.id, "cpp");
+  });
+
+  it("detects real C++ namespaces", () => {
+    assert.equal(detectLanguage("std::cout << x;\nint main() {}\n")?.profile.id, "cpp");
+  });
+});

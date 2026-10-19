@@ -1,0 +1,1028 @@
+{
+  "version": 1,
+  "languageId": "python",
+  "charDelayMs": 0,
+  "afterEnterMs": 4000,
+  "seed": 7,
+  "errorRate": 0.55,
+  "foreignRate": 0.08,
+  "solutions": [
+    {
+      "label": "valid-parentheses",
+      "stepStart": 0,
+      "stepCount": 17
+    },
+    {
+      "label": "merge-intervals",
+      "stepStart": 17,
+      "stepCount": 16
+    },
+    {
+      "label": "binary-search",
+      "stepStart": 33,
+      "stepCount": 17
+    },
+    {
+      "label": "climbing-stairs",
+      "stepStart": 50,
+      "stepCount": 12
+    },
+    {
+      "label": "maximum-subarray",
+      "stepStart": 62,
+      "stepCount": 12
+    },
+    {
+      "label": "group-anagrams",
+      "stepStart": 74,
+      "stepCount": 12
+    },
+    {
+      "label": "top-k-frequent",
+      "stepStart": 86,
+      "stepCount": 18
+    },
+    {
+      "label": "product-except-self",
+      "stepStart": 104,
+      "stepCount": 15
+    },
+    {
+      "label": "longest-substring-without-repeat",
+      "stepStart": 119,
+      "stepCount": 14
+    },
+    {
+      "label": "rotate-matrix",
+      "stepStart": 133,
+      "stepCount": 13
+    },
+    {
+      "label": "linked-list-cycle",
+      "stepStart": 146,
+      "stepCount": 19
+    },
+    {
+      "label": "level-order-traversal",
+      "stepStart": 165,
+      "stepCount": 26
+    }
+  ],
+  "steps": [
+    {
+      "insert": "# --- harness: valid-parentheses ---",
+      "enter": true,
+      "clean": "# --- harness: valid-parentheses ---"
+    },
+    {
+      "insert": "clsas Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def isValid(self, s: str) -> bool:",
+      "enter": true,
+      "clean": "    def isValid(self, s: str) -> bool:"
+    },
+    {
+      "insert": "        pairs = {')': '(', ']': '[', '}': '{'}",
+      "enter": true,
+      "clean": "        pairs = {')': '(', ']': '[', '}': '{'}"
+    },
+    {
+      "insert": "        satck = []",
+      "enter": true,
+      "clean": "        stack = []"
+    },
+    {
+      "insert": "        for char in s:",
+      "enter": true,
+      "clean": "        for char in s:"
+    },
+    {
+      "insert": "            if char in pairs.values():",
+      "enter": true,
+      "clean": "            if char in pairs.values():"
+    },
+    {
+      "insert": "                stack.append(char)",
+      "enter": true,
+      "clean": "                stack.append(char)"
+    },
+    {
+      "insert": "            esle:",
+      "enter": true,
+      "clean": "            else:"
+    },
+    {
+      "insert": "                if not stack:",
+      "enter": true,
+      "clean": "                if not stack:"
+    },
+    {
+      "insert": "                    return False",
+      "enter": true,
+      "clean": "                    return False"
+    },
+    {
+      "insert": "                openign = stack.pop()",
+      "enter": true,
+      "clean": "                opening = stack.pop()"
+    },
+    {
+      "insert": "                if opening != pairs[char]:",
+      "enter": true,
+      "clean": "                if opening != pairs[char]:"
+    },
+    {
+      "insert": "                    return False",
+      "enter": true,
+      "clean": "                    return False"
+    },
+    {
+      "insert": "        return not stack",
+      "enter": true,
+      "clean": "        return not stack"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: merge-intervals ---",
+      "enter": true,
+      "clean": "# --- harness: merge-intervals ---"
+    },
+    {
+      "insert": "class Soltuion:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def merge(sefl, intervals: list[list[int]]) -> list[list[int]]:",
+      "enter": true,
+      "clean": "    def merge(self, intervals: list[list[int]]) -> list[list[int]]:"
+    },
+    {
+      "insert": "        if not intervals:",
+      "enter": true,
+      "clean": "        if not intervals:"
+    },
+    {
+      "insert": "            rteurn []",
+      "enter": true,
+      "clean": "            return []"
+    },
+    {
+      "insert": "        ordered = sortde(intervals)",
+      "enter": true,
+      "clean": "        ordered = sorted(intervals)"
+    },
+    {
+      "insert": "        merged = [ordered[0][:]]",
+      "enter": true,
+      "clean": "        merged = [ordered[0][:]]"
+    },
+    {
+      "insert": "        for start, end in ordered[1:]:",
+      "enter": true,
+      "clean": "        for start, end in ordered[1:]:"
+    },
+    {
+      "insert": "            previous = merged[-1]",
+      "enter": true,
+      "clean": "            previous = merged[-1]"
+    },
+    {
+      "insert": "            if start <= previous[1]:",
+      "enter": true,
+      "clean": "            if start <= previous[1]:"
+    },
+    {
+      "insert": "                previous[1] = max(previous[1], end)",
+      "enter": true,
+      "clean": "                previous[1] = max(previous[1], end)"
+    },
+    {
+      "insert": "            else:",
+      "enter": true,
+      "clean": "            else:"
+    },
+    {
+      "insert": "                merged.append([start, end])",
+      "enter": true,
+      "clean": "                merged.append([start, end])"
+    },
+    {
+      "insert": "        return meregd",
+      "enter": true,
+      "clean": "        return merged"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: binary-search ---",
+      "enter": true,
+      "clean": "# --- harness: binary-search ---"
+    },
+    {
+      "insert": "clas Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def search(self, nums: list[int], target: int) -> int:",
+      "enter": true,
+      "clean": "    def search(self, nums: list[int], target: int) -> int:"
+    },
+    {
+      "insert": "        lfet = 0",
+      "enter": true,
+      "clean": "        left = 0"
+    },
+    {
+      "insert": "        right = eln(nums) - 1",
+      "enter": true,
+      "clean": "        right = len(nums) - 1"
+    },
+    {
+      "insert": "        while left <= right:",
+      "enter": true,
+      "clean": "        while left <= right:"
+    },
+    {
+      "insert": "            middle = (left + right) // 2",
+      "enter": true,
+      "clean": "            middle = (left + right) // 2"
+    },
+    {
+      "insert": "            value = nums[middle]",
+      "enter": true,
+      "clean": "            value = nums[middle]"
+    },
+    {
+      "insert": "            if vlaue == target:",
+      "enter": true,
+      "clean": "            if value == target:"
+    },
+    {
+      "insert": "                return middle",
+      "enter": true,
+      "clean": "                return middle"
+    },
+    {
+      "insert": "            if value < traget:",
+      "enter": true,
+      "clean": "            if value < target:"
+    },
+    {
+      "insert": "                left = middle + 1",
+      "enter": true,
+      "clean": "                left = middle + 1"
+    },
+    {
+      "insert": "            else:",
+      "enter": true,
+      "clean": "            else:"
+    },
+    {
+      "insert": "                right = middle - 1",
+      "enter": true,
+      "clean": "                right = middle - 1"
+    },
+    {
+      "insert": "        return -1",
+      "enter": true,
+      "clean": "        return -1"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: climbing-stairs ---",
+      "enter": true,
+      "clean": "# --- harness: climbing-stairs ---"
+    },
+    {
+      "insert": "calss Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def climbStairs(self, n: int) -> int:",
+      "enter": true,
+      "clean": "    def climbStairs(self, n: int) -> int:"
+    },
+    {
+      "insert": "        if n <= 1:",
+      "enter": true,
+      "clean": "        if n <= 1:"
+    },
+    {
+      "insert": "            return 1",
+      "enter": true,
+      "clean": "            return 1"
+    },
+    {
+      "insert": "        preivous = 1",
+      "enter": true,
+      "clean": "        previous = 1"
+    },
+    {
+      "insert": "        current = 1",
+      "enter": true,
+      "clean": "        current = 1"
+    },
+    {
+      "insert": "        for step in rnage(2, n + 1):",
+      "enter": true,
+      "clean": "        for step in range(2, n + 1):"
+    },
+    {
+      "insert": "            previous, current = current, previous + current",
+      "enter": true,
+      "clean": "            previous, current = current, previous + current"
+    },
+    {
+      "insert": "        return current",
+      "enter": true,
+      "clean": "        return current"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: maximum-subarray ---",
+      "enter": true,
+      "clean": "# --- harness: maximum-subarray ---"
+    },
+    {
+      "insert": "class Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    defn maxSubArray(self, nums: list[int]) -> int:",
+      "enter": true,
+      "clean": "    def maxSubArray(self, nums: list[int]) -> int:"
+    },
+    {
+      "insert": "        current = nums[0]",
+      "enter": true,
+      "clean": "        current = nums[0]"
+    },
+    {
+      "insert": "        bets = current",
+      "enter": true,
+      "clean": "        best = current"
+    },
+    {
+      "insert": "        for value in nums[1:]:",
+      "enter": true,
+      "clean": "        for value in nums[1:]:"
+    },
+    {
+      "insert": "            current = max(value, current + value)",
+      "enter": true,
+      "clean": "            current = max(value, current + value)"
+    },
+    {
+      "insert": "            if current > best:",
+      "enter": true,
+      "clean": "            if current > best:"
+    },
+    {
+      "insert": "                best = current",
+      "enter": true,
+      "clean": "                best = current"
+    },
+    {
+      "insert": "        retrun best",
+      "enter": true,
+      "clean": "        return best"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: group-anagrams ---",
+      "enter": true,
+      "clean": "# --- harness: group-anagrams ---"
+    },
+    {
+      "insert": "class Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def groupAnagrams(self, strs: list[str]) -> list[list[str]]:",
+      "enter": true,
+      "clean": "    def groupAnagrams(self, strs: list[str]) -> list[list[str]]:"
+    },
+    {
+      "insert": "        gropus = {}",
+      "enter": true,
+      "clean": "        groups = {}"
+    },
+    {
+      "insert": "        for word in srts:",
+      "enter": true,
+      "clean": "        for word in strs:"
+    },
+    {
+      "insert": "            key = tuple(sorted(word)",
+      "enter": true,
+      "clean": "            key = tuple(sorted(word))"
+    },
+    {
+      "insert": "            if key not in groups:",
+      "enter": true,
+      "clean": "            if key not in groups:"
+    },
+    {
+      "insert": "                groups[key] = []",
+      "enter": true,
+      "clean": "                groups[key] = []"
+    },
+    {
+      "insert": "            groups[key].append(word)",
+      "enter": true,
+      "clean": "            groups[key].append(word)"
+    },
+    {
+      "insert": "        return list(groups.values())",
+      "enter": true,
+      "clean": "        return list(groups.values())"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: top-k-frequent ---",
+      "enter": true,
+      "clean": "# --- harness: top-k-frequent ---"
+    },
+    {
+      "insert": "class Soluiton:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def topKFrequent(sefl, nums: list[int], k: int) -> list[int]:",
+      "enter": true,
+      "clean": "    def topKFrequent(self, nums: list[int], k: int) -> list[int]:"
+    },
+    {
+      "insert": "        counts = {}",
+      "enter": true,
+      "clean": "        counts = {}"
+    },
+    {
+      "insert": "        for value in nums:",
+      "enter": true,
+      "clean": "        for value in nums:"
+    },
+    {
+      "insert": "            conuts[value] = counts.get(value, 0) + 1",
+      "enter": true,
+      "clean": "            counts[value] = counts.get(value, 0) + 1"
+    },
+    {
+      "insert": "        buckets = [[] for _ in rnage(len(nums) + 1)]",
+      "enter": true,
+      "clean": "        buckets = [[] for _ in range(len(nums) + 1)]"
+    },
+    {
+      "insert": "        f|| value, frequency in counts.items():",
+      "enter": true,
+      "clean": "        for value, frequency in counts.items():"
+    },
+    {
+      "insert": "            buckets[frequency].append(value)",
+      "enter": true,
+      "clean": "            buckets[frequency].append(value)"
+    },
+    {
+      "insert": "        resutl = []",
+      "enter": true,
+      "clean": "        result = []"
+    },
+    {
+      "insert": "        for frequency in range(len(nums), 0, -1):",
+      "enter": true,
+      "clean": "        for frequency in range(len(nums), 0, -1):"
+    },
+    {
+      "insert": "            for value in buckets[frequency]:",
+      "enter": true,
+      "clean": "            for value in buckets[frequency]:"
+    },
+    {
+      "insert": "                rseult.append(value)",
+      "enter": true,
+      "clean": "                result.append(value)"
+    },
+    {
+      "insert": "                if len(result) == k:",
+      "enter": true,
+      "clean": "                if len(result) == k:"
+    },
+    {
+      "insert": "                    return result",
+      "enter": true,
+      "clean": "                    return result"
+    },
+    {
+      "insert": "        return result",
+      "enter": true,
+      "clean": "        return result"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: product-except-self ---",
+      "enter": true,
+      "clean": "# --- harness: product-except-self ---"
+    },
+    {
+      "insert": "class Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def productExceptSelf(sefl, nums: list[int]) -> list[int]:",
+      "enter": true,
+      "clean": "    def productExceptSelf(self, nums: list[int]) -> list[int]:"
+    },
+    {
+      "insert": "        rseult = [1] * len(nums)",
+      "enter": true,
+      "clean": "        result = [1] * len(nums)"
+    },
+    {
+      "insert": "        prefix = 1",
+      "enter": true,
+      "clean": "        prefix = 1"
+    },
+    {
+      "insert": "        for index in range(len(nums)):",
+      "enter": true,
+      "clean": "        for index in range(len(nums)):"
+    },
+    {
+      "insert": "            result[index] = prefix",
+      "enter": true,
+      "clean": "            result[index] = prefix"
+    },
+    {
+      "insert": "            prefix *= nums[index]",
+      "enter": true,
+      "clean": "            prefix *= nums[index]"
+    },
+    {
+      "insert": "        suffix = 1",
+      "enter": true,
+      "clean": "        suffix = 1"
+    },
+    {
+      "insert": "        for index in range(len(nums) - 1, -1, -1):",
+      "enter": true,
+      "clean": "        for index in range(len(nums) - 1, -1, -1):"
+    },
+    {
+      "insert": "            reslut[index] *= suffix",
+      "enter": true,
+      "clean": "            result[index] *= suffix"
+    },
+    {
+      "insert": "            suffix *= nums[index]",
+      "enter": true,
+      "clean": "            suffix *= nums[index]"
+    },
+    {
+      "insert": "        return result",
+      "enter": true,
+      "clean": "        return result"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: longest-substring-without-repeat ---",
+      "enter": true,
+      "clean": "# --- harness: longest-substring-without-repeat ---"
+    },
+    {
+      "insert": "clas Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def lengthOfLongestSubstring(sefl, s: str) -> int:",
+      "enter": true,
+      "clean": "    def lengthOfLongestSubstring(self, s: str) -> int:"
+    },
+    {
+      "insert": "        last_seen = {}",
+      "enter": true,
+      "clean": "        last_seen = {}"
+    },
+    {
+      "insert": "        left = 0",
+      "enter": true,
+      "clean": "        left = 0"
+    },
+    {
+      "insert": "        bset = 0",
+      "enter": true,
+      "clean": "        best = 0"
+    },
+    {
+      "insert": "        for right, char in enumerate(s):",
+      "enter": true,
+      "clean": "        for right, char in enumerate(s):"
+    },
+    {
+      "insert": "            if char in last_seen && last_seen[char] >= left:",
+      "enter": true,
+      "clean": "            if char in last_seen and last_seen[char] >= left:"
+    },
+    {
+      "insert": "                left = last_seen[char] + 1",
+      "enter": true,
+      "clean": "                left = last_seen[char] + 1"
+    },
+    {
+      "insert": "            last_seen[char] = right",
+      "enter": true,
+      "clean": "            last_seen[char] = right"
+    },
+    {
+      "insert": "            best = max(best, rgiht - left + 1)",
+      "enter": true,
+      "clean": "            best = max(best, right - left + 1)"
+    },
+    {
+      "insert": "        return bset",
+      "enter": true,
+      "clean": "        return best"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: rotate-matrix ---",
+      "enter": true,
+      "clean": "# --- harness: rotate-matrix ---"
+    },
+    {
+      "insert": "clas Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def rotate(self, matrix: list[list[int]]) -> None:",
+      "enter": true,
+      "clean": "    def rotate(self, matrix: list[list[int]]) -> None:"
+    },
+    {
+      "insert": "        siez = len(matrix)",
+      "enter": true,
+      "clean": "        size = len(matrix)"
+    },
+    {
+      "insert": "        for row in range(size):",
+      "enter": true,
+      "clean": "        for row in range(size):"
+    },
+    {
+      "insert": "            for column in range(row + 1, size):",
+      "enter": true,
+      "clean": "            for column in range(row + 1, size):"
+    },
+    {
+      "insert": "                matrix[row][column], matrix[column][row] = (",
+      "enter": true,
+      "clean": "                matrix[row][column], matrix[column][row] = ("
+    },
+    {
+      "insert": "                    matrix[column][row], matrix[row][column]",
+      "enter": true,
+      "clean": "                    matrix[column][row], matrix[row][column]"
+    },
+    {
+      "insert": "                )f;",
+      "enter": true,
+      "clean": "                )"
+    },
+    {
+      "insert": "        for row in matrix:",
+      "enter": true,
+      "clean": "        for row in matrix:"
+    },
+    {
+      "insert": "            std::cout << \"hi\" << std::endl;",
+      "enter": true,
+      "clean": "            row.reverse()"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: linked-list-cycle ---",
+      "enter": true,
+      "clean": "# --- harness: linked-list-cycle ---"
+    },
+    {
+      "insert": "class ListNode:",
+      "enter": true,
+      "clean": "class ListNode:"
+    },
+    {
+      "insert": "    defn __init__(self, val=0, next=None):",
+      "enter": true,
+      "clean": "    def __init__(self, val=0, next=None):"
+    },
+    {
+      "insert": "        self.val = val",
+      "enter": true,
+      "clean": "        self.val = val"
+    },
+    {
+      "insert": "        self.next = next",
+      "enter": true,
+      "clean": "        self.next = next"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "clas Solution:",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    defn hasCycle(self, head: ListNode | None) -> bool:",
+      "enter": true,
+      "clean": "    def hasCycle(self, head: ListNode | None) -> bool:"
+    },
+    {
+      "insert": "        slwo = head",
+      "enter": true,
+      "clean": "        slow = head"
+    },
+    {
+      "insert": "        fats = head",
+      "enter": true,
+      "clean": "        fast = head"
+    },
+    {
+      "insert": "        fmt.Println(ans)",
+      "enter": true,
+      "clean": "        while fast is not None and fast.next is not None:"
+    },
+    {
+      "insert": "            slow = slow.next",
+      "enter": true,
+      "clean": "            slow = slow.next"
+    },
+    {
+      "insert": "            fast = fast.next.nextf;",
+      "enter": true,
+      "clean": "            fast = fast.next.next"
+    },
+    {
+      "insert": "            if slow is fast:",
+      "enter": true,
+      "clean": "            if slow is fast:"
+    },
+    {
+      "insert": "                return Treu",
+      "enter": true,
+      "clean": "                return True"
+    },
+    {
+      "insert": "        return Flase",
+      "enter": true,
+      "clean": "        return False"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "# --- harness: level-order-traversal ---",
+      "enter": true,
+      "clean": "# --- harness: level-order-traversal ---"
+    },
+    {
+      "insert": "class TreeNode:",
+      "enter": true,
+      "clean": "class TreeNode:"
+    },
+    {
+      "insert": "    def __init__(self, val=0, left=None, right=None):",
+      "enter": true,
+      "clean": "    def __init__(self, val=0, left=None, right=None):"
+    },
+    {
+      "insert": "        self.val = val",
+      "enter": true,
+      "clean": "        self.val = val"
+    },
+    {
+      "insert": "        sefl.left = left",
+      "enter": true,
+      "clean": "        self.left = left"
+    },
+    {
+      "insert": "        System.out.println(\"x\");",
+      "enter": true,
+      "clean": "        self.right = right"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "let mut x = 0;",
+      "enter": true,
+      "clean": "class Solution:"
+    },
+    {
+      "insert": "    def levelOrder(self, root: TreeNode | None) -> list[list[int]]:",
+      "enter": true,
+      "clean": "    def levelOrder(self, root: TreeNode | None) -> list[list[int]]:"
+    },
+    {
+      "insert": "        if root is None:",
+      "enter": true,
+      "clean": "        if root is None:"
+    },
+    {
+      "insert": "            retrun []",
+      "enter": true,
+      "clean": "            return []"
+    },
+    {
+      "insert": "        reslut = []",
+      "enter": true,
+      "clean": "        result = []"
+    },
+    {
+      "insert": "        level = [root]",
+      "enter": true,
+      "clean": "        level = [root]"
+    },
+    {
+      "insert": "        while level:",
+      "enter": true,
+      "clean": "        while level:"
+    },
+    {
+      "insert": "            result.append([node.val f|| node in level])",
+      "enter": true,
+      "clean": "            result.append([node.val for node in level])"
+    },
+    {
+      "insert": "            let mut x = 0;",
+      "enter": true,
+      "clean": "            following = []"
+    },
+    {
+      "insert": "            for ndoe in level:",
+      "enter": true,
+      "clean": "            for node in level:"
+    },
+    {
+      "insert": "                if node.left is not Nnoe:",
+      "enter": true,
+      "clean": "                if node.left is not None:"
+    },
+    {
+      "insert": "                    System.out.println(\"x\");",
+      "enter": true,
+      "clean": "                    following.append(node.left)"
+    },
+    {
+      "insert": "                if node.right is not None:",
+      "enter": true,
+      "clean": "                if node.right is not None:"
+    },
+    {
+      "insert": "                    following.append(node.rihgt)",
+      "enter": true,
+      "clean": "                    following.append(node.right)"
+    },
+    {
+      "insert": "            level = following",
+      "enter": true,
+      "clean": "            level = following"
+    },
+    {
+      "insert": "        return reuslt",
+      "enter": true,
+      "clean": "        return result"
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    },
+    {
+      "insert": "",
+      "enter": true,
+      "clean": ""
+    }
+  ]
+}

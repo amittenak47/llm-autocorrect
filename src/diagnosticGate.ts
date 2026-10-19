@@ -1,8 +1,20 @@
 import * as vscode from "vscode";
 import { cfg } from "./config";
+import { DiagLike, resolveUpstreamTarget } from "./upstreamTarget";
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+    if (signal?.aborted) {
+      done();
+    }
+  });
 }
 
 function diagnosticsOnLine(uri: vscode.Uri, line: number): vscode.Diagnostic[] {
@@ -14,65 +26,19 @@ function diagnosticsOnLine(uri: vscode.Uri, line: number): vscode.Diagnostic[] {
   );
 }
 
-function diagnosticsStartingOnLine(uri: vscode.Uri, line: number): vscode.Diagnostic[] {
-  return vscode.languages.getDiagnostics(uri).filter(
-    (d) =>
-      d.severity <= vscode.DiagnosticSeverity.Warning && d.range.start.line === line
-  );
-}
-
-/** Parse errors on the line below often cascade from a typo on the previous line. */
-const CASCADE_DIAG = /unexpected indentation|can be used only within|is not defined/i;
-const ROOT_DIAG =
-  /expected expression|invalid syntax|unterminated|was never closed|statements must be separated/i;
-
-/**
- * When line L only has cascade diagnostics (e.g. return outside broken def),
- * or a root diagnostic starts on a previous line and spans into L, fix upstream.
- */
 export function resolveLineFixTarget(
   uri: vscode.Uri,
   doc: vscode.TextDocument,
-  line: number
+  line: number,
+  extraDiags: DiagLike[] = []
 ): number {
-  const overlapping = diagnosticsOnLine(uri, line);
-  if (overlapping.length === 0) {
-    return line;
-  }
-
-  // Root error often starts on the previous line but its range covers this line
-  // (e.g. "Expected expression" on `defn` spanning into the indented `return`).
-  for (const d of overlapping) {
-    if (d.range.start.line < line && ROOT_DIAG.test(d.message)) {
-      return d.range.start.line;
-    }
-  }
-
-  // Prefer diagnostics that *start* on this line so spanning root errors above
-  // do not defeat cascade detection.
-  const startingHere = diagnosticsStartingOnLine(uri, line);
-  const forCascade = startingHere.length > 0 ? startingHere : overlapping;
-  const allCascade = forCascade.every((d) => CASCADE_DIAG.test(d.message));
-  if (!allCascade) {
-    return line;
-  }
-
-  for (let prev = line - 1; prev >= 0 && prev >= line - 8; prev--) {
-    const text = doc.lineAt(prev).text;
-    if (text.trim().length === 0) {
-      continue;
-    }
-    const prevStart = diagnosticsStartingOnLine(uri, prev);
-    const prevDiags = prevStart.length > 0 ? prevStart : diagnosticsOnLine(uri, prev);
-    if (prevDiags.length === 0) {
-      continue;
-    }
-    const hasRoot = prevDiags.some((d) => ROOT_DIAG.test(d.message));
-    if (hasRoot || prevDiags.some((d) => d.severity === vscode.DiagnosticSeverity.Error)) {
-      return prev;
-    }
-  }
-  return line;
+  const diags = vscode.languages.getDiagnostics(uri).map((d) => ({
+    startLine: d.range.start.line,
+    endLine: d.range.end.line,
+    message: d.message,
+    severity: d.severity,
+  }));
+  return resolveUpstreamTarget(line, [...diags, ...extraDiags], (i) => doc.lineAt(i).text, doc.languageId);
 }
 
 /** Previous non-blank line within a short lookback (fallback when LSP ranges are odd). */
@@ -105,17 +71,18 @@ export function rangeHasDiagnostic(
 export async function waitForLineDiagnostic(
   uri: vscode.Uri,
   line: number,
-  maxWaitMs: number
+  maxWaitMs: number,
+  signal?: AbortSignal
 ): Promise<{ found: boolean; elapsed: number }> {
   const start = Date.now();
   const deadline = start + maxWaitMs;
-  while (Date.now() < deadline) {
+  while (!signal?.aborted && Date.now() < deadline) {
     if (lineHasDiagnostic(uri, line)) {
       return { found: true, elapsed: Date.now() - start };
     }
-    await sleep(200);
+    await sleep(200, signal);
   }
-  return { found: lineHasDiagnostic(uri, line), elapsed: Date.now() - start };
+  return { found: !signal?.aborted && lineHasDiagnostic(uri, line), elapsed: Date.now() - start };
 }
 
 export function describeDiagnostics(uri: vscode.Uri, line?: number): string[] {
@@ -139,12 +106,23 @@ export async function shouldFixLine(
   uri: vscode.Uri,
   line: number,
   manual: boolean,
-  output?: vscode.OutputChannel
+  output?: vscode.OutputChannel,
+  signal?: AbortSignal,
+  parserHasError?: () => Promise<boolean>
 ): Promise<boolean> {
+  if (signal?.aborted) {
+    return false;
+  }
   const requireDiag = manual ? cfg().fixRequireDiagnostic : cfg().requireDiagnostic;
   if (!requireDiag) {
     return true;
   }
+  if (await parserHasError?.()) {
+    if (signal?.aborted) return false;
+    output?.appendLine(`[line] diagnostic gate: parser found a syntax error on line ${line + 1}`);
+    return true;
+  }
+  if (signal?.aborted) return false;
   if (manual) {
     const found = lineHasDiagnostic(uri, line);
     if (!found && output) {
@@ -160,7 +138,7 @@ export async function shouldFixLine(
       `[line] diagnostic gate: waiting up to ${waitMs}ms for squiggle on line ${line + 1}`
     );
   }
-  const { found, elapsed } = await waitForLineDiagnostic(uri, line, waitMs);
+  const { found, elapsed } = await waitForLineDiagnostic(uri, line, waitMs, signal);
   if (output) {
     if (found) {
       const squiggles = describeDiagnostics(uri, line);
@@ -192,12 +170,14 @@ export function shouldFixRange(
   uri: vscode.Uri,
   startLine: number,
   endLine: number,
-  output?: vscode.OutputChannel
+  output?: vscode.OutputChannel,
+  parserErrorLines?: number[]
 ): boolean {
   if (!cfg().fixRequireDiagnostic) {
     return true;
   }
-  const found = rangeHasDiagnostic(uri, startLine, endLine);
+  const found = parserErrorLines?.some((line) => startLine <= line && line <= endLine) ||
+    rangeHasDiagnostic(uri, startLine, endLine);
   if (!found && output) {
     output.appendLine(
       `[block] skip ${startLine + 1}-${endLine + 1}: no LSP squiggle in range ` +

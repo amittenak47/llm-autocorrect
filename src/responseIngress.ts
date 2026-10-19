@@ -10,9 +10,42 @@ export function isUnchanged(text: string): boolean {
   return text.trim() === "UNCHANGED";
 }
 
+// Labels small models copy from the prompt ("REPLY:", "Correction:") instead of answering with bare code.
+const LABEL_WORDS =
+  "REPLY|ANSWER|OUTPUT|RESULT|CODE(?: BLOCK)?|CORRECTION|CORRECTED(?: LINE| CODE)?|FIXED(?: LINE| CODE)?|TARGET(?: LINE)?";
+const TITLE_WORDS =
+  "Reply|Answer|Output|Result|Code(?: block)?|Correction|Corrected(?: line| code)?|Fixed(?: line| code)?|Target(?: line)?";
+/** A line that is only a label, e.g. "REPLY:" or "Correction:" — never valid code on its own. */
+const LABEL_ONLY = new RegExp(`^\\s*(?:=>|->|→)?\\s*(?:${LABEL_WORDS}|${TITLE_WORDS})\\s*:\\s*$`);
+/** An uppercase label before the code on the same line. Lowercase/title case is left alone (`answer: int = 5`). */
+const LABEL_PREFIX = /^(\s*)(?:REPLY|ANSWER|OUTPUT|CODE(?: BLOCK)?|CORRECTION|CORRECTED(?: LINE| CODE)?|FIXED(?: LINE| CODE)?)\s*:\s*/;
+/** The example format echoed back on one line: "TARGET: x => REPLY: y" / "x -> y". */
+const ECHOED_PAIR = /=>\s*REPLY\s*:\s*(.*)$/;
+const LEADING_ARROW = /^(\s*)(?:->|=>|→)\s+/;
+
+/**
+ * Remove labels a model added around its answer, keeping the code: "REPLY:\n    return x" → "    return x",
+ * "    totl = 0\n\nCorrection:\n    total = 0" → "    total = 0", "REPLY: print(x)" → "print(x)".
+ */
+export function stripReplyLabels(text: string): string {
+  let lines = text.split("\n");
+  const lastLabel = lines.map((line) => LABEL_ONLY.test(line)).lastIndexOf(true);
+  if (lastLabel >= 0) {
+    lines = lines.slice(lastLabel + 1);
+  }
+  const first = lines.findIndex((line) => line.trim().length > 0);
+  if (first >= 0) {
+    const echoed = lines[first].match(ECHOED_PAIR);
+    lines[first] = echoed
+      ? echoed[1]
+      : lines[first].replace(LABEL_PREFIX, "$1").replace(LEADING_ARROW, "$1");
+  }
+  return lines.join("\n");
+}
+
 /** Non-empty lines from model output; [] for UNCHANGED or blank. */
 export function modelLines(response: string): string[] {
-  const text = normalizeModelText(response);
+  const text = stripReplyLabels(normalizeModelText(response));
   if (isUnchanged(text) || text.trim().length === 0) {
     return [];
   }
@@ -82,7 +115,7 @@ export function mergeCavemanComments(
   modelText: string,
   profile: LanguageProfile
 ): string | undefined {
-  const origLines = original.split("\n");
+  const origLines = original.split("\n").map((line) => line.replace(/\r$/, ""));
   const modelLinesArr = modelText.split("\n");
   if (origLines.length !== modelLinesArr.length) {
     return undefined;
@@ -111,4 +144,57 @@ export function mergeCavemanComments(
     }
   }
   return out.join("\n");
+}
+
+/** Preserve whole code lines in order; allow only documentation as extra lines. */
+export function docsPreservesCode(original: string, result: string, profile: LanguageProfile): boolean {
+  const isLineComment = (line: string): boolean =>
+    profile.lineCommentPrefixes.some((prefix) => line.trimStart().startsWith(prefix));
+  const code = original.split("\n").map((line) => line.trimEnd())
+    .filter((line) => line.length > 0 && !isLineComment(line));
+  let next = 0;
+  let closing: string | undefined;
+  let insertedBlock = false;
+  for (const line of result.split("\n").map((line) => line.trimEnd())) {
+    const trimmed = line.trimStart();
+    const matched: boolean = !insertedBlock && next < code.length && line === code[next];
+    if (matched) {
+      next++;
+    }
+    if (closing) {
+      const end = trimmed.indexOf(closing);
+      if (end >= 0) {
+        const suffix = trimmed.slice(end + closing.length);
+        if (!matched && suffix.trim() && !isLineComment(suffix)) {
+          return false;
+        }
+        closing = undefined;
+        insertedBlock = false;
+      }
+      continue;
+    }
+    if (!trimmed || isLineComment(line)) {
+      continue;
+    }
+    const triple = profile.id === "python" ? trimmed.match(/^(\x22{3}|\x27{3})/)?.[0] : undefined;
+    const opener = triple ?? (trimmed.startsWith("/*") ? "/*" : undefined);
+    if (!opener) {
+      if (!matched) {
+        return false;
+      }
+      continue;
+    }
+    const delimiter = triple ?? "*/";
+    const end = trimmed.indexOf(delimiter, opener.length);
+    if (end < 0) {
+      closing = delimiter;
+      insertedBlock = !matched;
+    } else {
+      const suffix = trimmed.slice(end + delimiter.length);
+      if (!matched && suffix.trim() && !isLineComment(suffix)) {
+        return false;
+      }
+    }
+  }
+  return next === code.length && closing === undefined;
 }

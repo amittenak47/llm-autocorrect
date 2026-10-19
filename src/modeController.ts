@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import { activeLlmProfile, cfg, setActiveProfile } from "./config";
 import { ContextAssemblerService } from "./contextAssembler";
+import { selectionLineSpan } from "./blockMath";
 import { BlockCapture } from "./blockCapture";
-import { FixQueue } from "./fixQueue";
+import { FixQueue, QueuedFix } from "./fixQueue";
 import { LlmRouter } from "./llmRouter";
 import { LineCorrector } from "./lineCorrector";
 import {
@@ -13,18 +14,21 @@ import {
 } from "./modeContext";
 import { StageDecorations } from "./stageDecorations";
 import { StagedExecutor } from "./stagedExecutor";
-import { StagedSession } from "./stagedSession";
+import { StagedOp, StagedSession } from "./stagedSession";
 import { StatusBar } from "./statusBar";
 import { tiersForOp } from "./profiles";
 
 const MENU_HINT =
-  "Menu — A/C instant · Shift+A/C stage · S capture · Q review · Shift+Q all queues · Esc";
+  "Menu — A/C instant · Shift+A/C stage · S capture · R edit queued · Q review · Shift+Q all queues · Esc";
 const CAPTURE_HINT = "Capture — WASD size · E finish · Esc cancel";
 const STAGED_HINT =
-  "Staged — D/F/X op · 1-5 ctx · M profile · E send · Shift+E queue · Esc";
+  "Staged — D/F/X op · Shift+D/F then-step · 1-5 ctx · M profile · E send · Shift+E queue · S resize · Esc";
 
 export class ModeController implements vscode.Disposable {
   readonly staged = new StagedSession();
+  private resizeBackup: { editor: vscode.TextEditor; range: vscode.Range } | undefined;
+  private restagedFrom: QueuedFix | undefined;
+  private readonly stagedCleared: vscode.Disposable;
 
   constructor(
     private readonly blockCapture: BlockCapture,
@@ -36,7 +40,19 @@ export class ModeController implements vscode.Disposable {
     private readonly stageDeco: StageDecorations,
     private readonly statusBar: StatusBar,
     private readonly output: vscode.OutputChannel
-  ) {}
+  ) {
+    this.stagedCleared = this.blockCapture.onDidClearStaged(() => {
+      this.restoreRestaged();
+      this.resizeBackup = undefined;
+      this.stageDeco.clear();
+    });
+  }
+
+  private restoreRestaged(): void {
+    const fix = this.restagedFrom;
+    this.restagedFrom = undefined;
+    if (fix) this.fixQueue.restore(fix);
+  }
 
   async enterMenuMode(): Promise<void> {
     if (this.blockCapture.isKeyboardCapture()) {
@@ -59,8 +75,6 @@ export class ModeController implements vscode.Disposable {
     const profileId = activeLlmProfile().id;
     if (resetAttrs) {
       this.staged.resetAttributes(profileId, cfg().defaultTiers);
-    } else {
-      this.staged.attributes.profileId = profileId;
     }
     this.syncStageDecorations();
     this.refreshStagedHint();
@@ -111,9 +125,11 @@ export class ModeController implements vscode.Disposable {
       vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
       return;
     }
+    const selection = editor.selection;
+    const span = selectionLineSpan(selection.start.line, selection.end.line, selection.end.character);
     const range =
       this.blockCapture.getStagedRange(editor) ??
-      (editor.selection.isEmpty ? undefined : editor.selection);
+      (selection.isEmpty ? undefined : new vscode.Range(span.startLine, 0, span.endLine, 0));
     if (!range) {
       vscode.window.setStatusBarMessage("Autocorrect: select a block for A", 3000);
       return;
@@ -144,6 +160,7 @@ export class ModeController implements vscode.Disposable {
     if (!this.blockCapture.stageFromSelection(editor)) {
       return;
     }
+    this.restoreRestaged();
     await this.enterStagedMode(true);
   }
 
@@ -155,6 +172,7 @@ export class ModeController implements vscode.Disposable {
     if (!this.blockCapture.stageLineNearCursor(editor)) {
       return;
     }
+    this.restoreRestaged();
     await this.enterStagedMode(true);
   }
 
@@ -169,16 +187,69 @@ export class ModeController implements vscode.Disposable {
 
   async stagedSetDocs(): Promise<void> {
     this.staged.setDocs();
-    this.staged.attributes.tiers = tiersForOp("docs", this.staged.attributes.tiers);
+    // D/F toggle: tiers follow whichever op is now active (fix after a second press).
+    this.staged.attributes.tiers = tiersForOp(this.staged.attributes.op, this.staged.attributes.tiers);
     this.syncStageDecorations();
     this.refreshStagedHint();
   }
 
   async stagedSetCaveman(): Promise<void> {
     this.staged.setCaveman();
-    this.staged.attributes.tiers = tiersForOp("caveman", this.staged.attributes.tiers);
+    // D/F toggle: tiers follow whichever op is now active (fix after a second press).
+    this.staged.attributes.tiers = tiersForOp(this.staged.attributes.op, this.staged.attributes.tiers);
     this.syncStageDecorations();
     this.refreshStagedHint();
+  }
+
+  stagedToggleThen(op: StagedOp): void {
+    const message = this.staged.toggleThen(op);
+    if (message) vscode.window.setStatusBarMessage(message, 3000);
+    this.syncStageDecorations();
+    this.refreshStagedHint();
+  }
+
+  async stagedResize(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    const range = editor ? this.blockCapture.getStagedRange(editor) : undefined;
+    if (!editor || !range) return;
+    this.resizeBackup = { editor, range };
+    this.stageDeco.clear();
+    this.blockCapture.startResize(editor, range);
+    await setModeContext(MENU_MODE, false);
+    await setModeContext(STAGED_MODE, false);
+    await setModeContext(CAPTURE_ADJUST_MODE, true);
+    this.statusBar.setModeHint("Resize — WASD size · E keep flags · Esc restore");
+  }
+
+  async restageQueuedAtCursor(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.setStatusBarMessage("Autocorrect: open a file first", 3000);
+      return;
+    }
+    this.restoreRestaged();
+    const fix = this.fixQueue.takeAtCursor(editor);
+    if (!fix) return;
+    if (this.blockCapture.isKeyboardCapture()) {
+      this.blockCapture.cancelCapture();
+    } else {
+      this.blockCapture.clearStaged();
+    }
+    this.blockCapture.stageRange(editor, new vscode.Range(fix.line, 0, fix.endLine ?? fix.line, 0));
+    this.staged.attributes = {
+      op: fix.op,
+      then: [...fix.then],
+      contextNote: fix.contextNote,
+      tiers: { ...fix.tiers },
+      profileId: fix.profileId,
+    };
+    this.restagedFrom = fix;
+    await setModeContext(CAPTURE_ADJUST_MODE, false);
+    await this.enterStagedMode(false);
+    vscode.window.setStatusBarMessage(
+      "Autocorrect: editing queued item — change flags or S to resize, then E / Shift+E (Esc puts it back)",
+      6000
+    );
   }
 
   async stagedSetContext(): Promise<void> {
@@ -234,13 +305,23 @@ export class ModeController implements vscode.Disposable {
       vscode.window.setStatusBarMessage("Autocorrect: nothing staged", 3000);
       return;
     }
-    const attrs = { ...this.staged.attributes };
+    const attrs = {
+      ...this.staged.attributes,
+      tiers: { ...this.staged.attributes.tiers },
+      then: [...this.staged.attributes.then],
+    };
     const result = await this.stagedExecutor.run(editor, range, attrs, queue);
     if (result.ok) {
+      this.restagedFrom = undefined;
       this.blockCapture.clearStaged();
       this.staged.resetAttributes(activeLlmProfile().id);
       this.stageDeco.clear();
       await this.exitMenuMode(false);
+    } else if (this.blockCapture.hasStagedBlock()) {
+      // The block stays staged so it can be retried; say so, or it looks like the menu stopped working.
+      this.statusBar.setModeHint(
+        `${STAGED_HINT} — last send skipped (see Output): E retry · S resize · Esc clear`
+      );
     }
   }
 
@@ -259,6 +340,7 @@ export class ModeController implements vscode.Disposable {
       return;
     }
     this.staged.resetAttributes(activeLlmProfile().id);
+    this.stageDeco.clear();
     if (!this.blockCapture.startKeyboardCapture(editor)) {
       return;
     }
@@ -275,6 +357,10 @@ export class ModeController implements vscode.Disposable {
     const k = key.toLowerCase();
     if (k === "s") {
       await this.startKeyboardCapture();
+      return;
+    }
+    if (k === "r") {
+      await this.restageQueuedAtCursor();
       return;
     }
     if (k === "q") {
@@ -299,11 +385,22 @@ export class ModeController implements vscode.Disposable {
       vscode.window.setStatusBarMessage("Autocorrect: no capture to finish", 3000);
       return;
     }
+    const resized = this.resizeBackup !== undefined;
+    this.resizeBackup = undefined;
     await this.exitCaptureAdjustMode();
-    await this.enterStagedMode(true);
+    await this.enterStagedMode(!resized);
   }
 
   async captureCancel(): Promise<void> {
+    const backup = this.resizeBackup;
+    if (backup) {
+      this.resizeBackup = undefined;
+      this.blockCapture.cancelCapture(true);
+      this.blockCapture.stageRange(backup.editor, backup.range);
+      await this.exitCaptureAdjustMode();
+      await this.enterStagedMode(false);
+      return;
+    }
     this.blockCapture.cancelCapture();
     this.staged.resetAttributes(activeLlmProfile().id);
     this.stageDeco.clear();
@@ -313,6 +410,8 @@ export class ModeController implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.restoreRestaged();
+    this.stagedCleared.dispose();
     void setModeContext(MENU_MODE, false);
     void setModeContext(CAPTURE_ADJUST_MODE, false);
     void setModeContext(STAGED_MODE, false);

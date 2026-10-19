@@ -1,5 +1,7 @@
 # Tests
 
+See [manual/README.md](manual/README.md) for the v0.4.0 manual feature checklist and fixtures.
+
 ## Manual (extension host)
 
 1. Press **F5** in the project window.

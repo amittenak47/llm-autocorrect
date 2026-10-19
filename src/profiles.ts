@@ -233,22 +233,31 @@ export function defaultMaxConcurrent(profile: LlmProfileConfig): number {
   return 2;
 }
 
-/** Resolve profile list: explicit settings, legacy single profile, or DEFAULT_PROFILES. */
+/** Merge built-in overrides and custom profiles, preserving the legacy fallback. */
 export function resolveProfiles(
-  configured: LlmProfileConfig[],
+  configured: Partial<LlmProfileConfig>[],
   legacyProvider: string,
   legacyModel: string,
-  legacyBaseUrl: string
+  legacyBaseUrl: string,
+  hidden: string[] = []
 ): LlmProfileConfig[] {
-  if (configured.length > 0) {
-    return configured.map(normalizeProfile);
-  }
   const hasLegacy =
     legacyProvider !== "groq" || legacyModel !== "" || legacyBaseUrl !== "";
-  if (hasLegacy) {
+  if (configured.length === 0 && hasLegacy) {
     return migrateLegacyProfile(legacyProvider, legacyModel, legacyBaseUrl).map(normalizeProfile);
   }
-  return DEFAULT_PROFILES.map(normalizeProfile);
+  const merged = DEFAULT_PROFILES.map((p) => ({ ...p }));
+  for (const entry of configured) {
+    if (!entry || !entry.id) continue;
+    const index = DEFAULT_PROFILES.findIndex((p) => p.id === entry.id);
+    if (index >= 0) {
+      merged[index] = { ...DEFAULT_PROFILES[index], ...entry };
+    } else if (entry.provider) {
+      merged.push(entry as LlmProfileConfig);
+    }
+  }
+  const visible = merged.filter((p) => !hidden.includes(p.id));
+  return (visible.length > 0 ? visible : DEFAULT_PROFILES).map(normalizeProfile);
 }
 
 /** Build default profile list from legacy single-provider settings. */

@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { selectionLineSpan } from "./blockMath";
+import { applyLineChange } from "./regionLock";
 import { cfg } from "./config";
 import { PROFILES, LanguageProfile } from "./languages";
 
@@ -15,6 +17,8 @@ export class BlockCapture implements vscode.Disposable {
   private stagedRange: vscode.Range | undefined;
   private stagedDocUri: string | undefined;
   private readonly captureDecoration: vscode.TextEditorDecorationType;
+  private readonly stagedCleared = new vscode.EventEmitter<void>();
+  readonly onDidClearStaged = this.stagedCleared.event;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(private readonly output: vscode.OutputChannel) {
@@ -25,11 +29,13 @@ export class BlockCapture implements vscode.Disposable {
     });
     this.disposables.push(
       this.captureDecoration,
+      this.stagedCleared,
       vscode.window.onDidChangeTextEditorSelection((e) => this.onSelectionChange(e)),
       vscode.workspace.onDidChangeTextDocument((e) => this.onDocChange(e)),
       vscode.workspace.onDidCloseTextDocument((doc) => {
         if (this.recording && doc.uri.toString() === this.captureDocUri) {
           this.resetRecording();
+          this.clearStaged();
         }
         if (doc.uri.toString() === this.stagedDocUri) {
           this.clearStaged();
@@ -50,6 +56,19 @@ export class BlockCapture implements vscode.Disposable {
     return true;
   }
 
+  startResize(editor: vscode.TextEditor, range: vscode.Range): void {
+    // Keep the staged session while temporarily replacing its decoration with capture.
+    this.stagedRange = undefined;
+    this.stagedDocUri = undefined;
+    for (const visible of vscode.window.visibleTextEditors) {
+      visible.setDecorations(this.captureDecoration, []);
+    }
+    this.beginCapture(editor, new vscode.Position(range.start.line, 0), true);
+    this.headPosition = new vscode.Position(range.end.line, editor.document.lineAt(range.end.line).text.length);
+    this.syncHeadSelection(editor);
+    this.refreshCaptureDecoration(editor);
+  }
+
   isKeyboardCapture(): boolean {
     return this.recording && this.keyboardAdjust;
   }
@@ -66,7 +85,9 @@ export class BlockCapture implements vscode.Disposable {
       vscode.window.setStatusBarMessage("Autocorrect: select a block to stage", 3000);
       return false;
     }
-    return this.stageRange(editor, editor.selection);
+    const selection = editor.selection;
+    const span = selectionLineSpan(selection.start.line, selection.end.line, selection.end.character);
+    return this.stageRange(editor, new vscode.Range(span.startLine, 0, span.endLine, 0));
   }
 
   stageLineNearCursor(editor: vscode.TextEditor): boolean {
@@ -131,11 +152,12 @@ export class BlockCapture implements vscode.Disposable {
     for (const editor of vscode.window.visibleTextEditors) {
       editor.setDecorations(this.captureDecoration, []);
     }
+    this.stagedCleared.fire();
   }
 
-  cancelCapture(): void {
+  cancelCapture(keepSession = false): void {
     this.resetRecording();
-    this.clearStaged();
+    if (!keepSession) this.clearStaged();
     vscode.window.setStatusBarMessage("Autocorrect: capture cancelled", 3000);
     this.output.appendLine("[block] capture cancelled");
   }
@@ -236,6 +258,25 @@ export class BlockCapture implements vscode.Disposable {
   }
 
   private onDocChange(e: vscode.TextDocumentChangeEvent): void {
+    if (this.stagedRange && e.document.uri.toString() === this.stagedDocUri) {
+      let region = { startLine: this.stagedRange.start.line, endLine: this.stagedRange.end.line };
+      for (const change of e.contentChanges) {
+        region = applyLineChange(region, {
+          startLine: change.range.start.line,
+          endLine: change.range.end.line,
+          addedLines: change.text.split(/\r?\n/).length - 1,
+        }).region;
+      }
+      const lastLine = e.document.lineCount - 1;
+      this.stagedRange = this.fullLines(e.document, new vscode.Range(
+        Math.min(region.startLine, lastLine), 0, Math.min(region.endLine, lastLine), 0
+      ));
+      for (const editor of vscode.window.visibleTextEditors) {
+        if (editor.document.uri.toString() === this.stagedDocUri) {
+          this.paintStaged(editor);
+        }
+      }
+    }
     if (!this.recording || e.document.uri.toString() !== this.captureDocUri) {
       return;
     }

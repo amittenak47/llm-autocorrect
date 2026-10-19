@@ -2,7 +2,7 @@
   "name": "llm-autocorrect",
   "displayName": "LLM Autocorrect",
   "description": "LLM-powered code autocorrect: fixes typos/syntax errors line-by-line as you type, and offers to translate pasted code from another language.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "amittenak47",
   "private": false,
   "engines": {
@@ -16,8 +16,30 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "LLM endpoints and profiles are read from user settings only in untrusted workspaces.",
+      "restrictedConfigurations": [
+        "autocorrect.profiles",
+        "autocorrect.provider",
+        "autocorrect.baseUrl",
+        "autocorrect.model",
+        "autocorrect.guardian.profileId",
+        "autocorrect.prompt.prefix"
+      ]
+    }
+  },
   "contributes": {
     "commands": [
+      {
+        "command": "autocorrect.reviewLogic",
+        "title": "Autocorrect: Check for Logic Bugs"
+      },
+      {
+        "command": "autocorrect.clearLogicSuggestions",
+        "title": "Autocorrect: Clear Logic Suggestions"
+      },
       {
         "command": "autocorrect.toggle",
         "title": "Autocorrect: Toggle On/Off"
@@ -115,6 +137,22 @@
         "title": "Autocorrect: Menu — Stage Line (internal)"
       },
       {
+        "command": "autocorrect.stagedResize",
+        "title": "Autocorrect: Staged — Resize block (internal)"
+      },
+      {
+        "command": "autocorrect.stagedThenDocs",
+        "title": "Autocorrect: Staged — Then docs (internal)"
+      },
+      {
+        "command": "autocorrect.stagedThenCaveman",
+        "title": "Autocorrect: Staged — Then caveman (internal)"
+      },
+      {
+        "command": "autocorrect.restageQueuedAtCursor",
+        "title": "Autocorrect: Edit Queued Item at Cursor"
+      },
+      {
         "command": "autocorrect.stagedSetDocs",
         "title": "Autocorrect: Staged — Docs flag (internal)"
       },
@@ -197,34 +235,130 @@
     ],
     "menus": {
       "commandPalette": [
-        { "command": "autocorrect.exitMenuMode", "when": "false" },
-        { "command": "autocorrect.menuKeyA", "when": "false" },
-        { "command": "autocorrect.menuKeyShiftA", "when": "false" },
-        { "command": "autocorrect.menuKeyS", "when": "false" },
-        { "command": "autocorrect.menuKeyQ", "when": "false" },
-        { "command": "autocorrect.menuKeyC", "when": "false" },
-        { "command": "autocorrect.menuKeyShiftC", "when": "false" },
-        { "command": "autocorrect.stagedSetDocs", "when": "false" },
-        { "command": "autocorrect.stagedSetCaveman", "when": "false" },
-        { "command": "autocorrect.stagedSetContext", "when": "false" },
-        { "command": "autocorrect.stagedSubmit", "when": "false" },
-        { "command": "autocorrect.stagedSubmitQueue", "when": "false" },
-        { "command": "autocorrect.stagedCancel", "when": "false" },
-        { "command": "autocorrect.stagedToggleTier1", "when": "false" },
-        { "command": "autocorrect.stagedToggleTier2", "when": "false" },
-        { "command": "autocorrect.stagedToggleTier3", "when": "false" },
-        { "command": "autocorrect.stagedToggleTier4", "when": "false" },
-        { "command": "autocorrect.stagedToggleTier5", "when": "false" },
-        { "command": "autocorrect.stagedCycleProfile", "when": "false" },
-        { "command": "autocorrect.stagedPickProfile", "when": "false" },
-        { "command": "autocorrect.menuKeyShiftQ", "when": "false" },
-        { "command": "autocorrect.captureMoveUp", "when": "false" },
-        { "command": "autocorrect.captureMoveDown", "when": "false" },
-        { "command": "autocorrect.captureMoveLineStart", "when": "false" },
-        { "command": "autocorrect.captureMoveLineEnd", "when": "false" },
-        { "command": "autocorrect.captureFinish", "when": "false" },
-        { "command": "autocorrect.captureCancel", "when": "false" },
-        { "command": "autocorrect.statusBarClick", "when": "false" }
+        {
+          "command": "autocorrect.exitMenuMode",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyA",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyShiftA",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyS",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyQ",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyC",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyShiftC",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedResize",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedThenDocs",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedThenCaveman",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedSetDocs",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedSetCaveman",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedSetContext",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedSubmit",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedSubmitQueue",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedCancel",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedToggleTier1",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedToggleTier2",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedToggleTier3",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedToggleTier4",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedToggleTier5",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedCycleProfile",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.stagedPickProfile",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.menuKeyShiftQ",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.captureMoveUp",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.captureMoveDown",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.captureMoveLineStart",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.captureMoveLineEnd",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.captureFinish",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.captureCancel",
+          "when": "false"
+        },
+        {
+          "command": "autocorrect.statusBarClick",
+          "when": "false"
+        }
       ]
     },
     "keybindings": [
@@ -244,6 +378,11 @@
         "command": "autocorrect.exitMenuMode",
         "key": "escape",
         "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true && autocorrect.captureAdjustMode != true"
+      },
+      {
+        "command": "autocorrect.stagedResize",
+        "key": "s",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
       },
       {
         "command": "autocorrect.stagedCancel",
@@ -283,6 +422,21 @@
       {
         "command": "autocorrect.menuKeyShiftC",
         "key": "shift+c",
+        "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
+      },
+      {
+        "command": "autocorrect.stagedThenDocs",
+        "key": "shift+d",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.stagedThenCaveman",
+        "key": "shift+f",
+        "when": "editorTextFocus && autocorrect.stagedMode == true"
+      },
+      {
+        "command": "autocorrect.restageQueuedAtCursor",
+        "key": "r",
         "when": "editorTextFocus && autocorrect.menuMode == true && autocorrect.stagedMode != true"
       },
       {
@@ -410,6 +564,7 @@
           "description": "Offer to translate pasted code that looks like a different language than the current file."
         },
         "autocorrect.provider": {
+          "scope": "machine",
           "type": "string",
           "enum": [
             "groq",
@@ -421,11 +576,13 @@
           "description": "LLM provider. Set the API key via the 'Autocorrect: Set API Key' command (stored in VS Code secret storage, not settings)."
         },
         "autocorrect.model": {
+          "scope": "machine",
           "type": "string",
           "default": "",
           "description": "Model ID. Leave empty for the provider default (groq: llama-3.1-8b-instant, gemini: gemini-2.5-flash-lite, anthropic: claude-haiku-4-5-20251001)."
         },
         "autocorrect.baseUrl": {
+          "scope": "machine",
           "type": "string",
           "default": "",
           "description": "Base URL for the 'openai-compatible' provider, e.g. http://localhost:11434/v1"
@@ -440,6 +597,11 @@
           ],
           "description": "VS Code language IDs the extension is active for. Supported: python, go, java, c, cpp, rust, zig, javascript, typescript."
         },
+        "autocorrect.syntax.useParser": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the tree-sitter parser in addition to language-server diagnostics for syntax checking."
+        },
         "autocorrect.line.requireDiagnostic": {
           "type": "boolean",
           "default": true,
@@ -449,6 +611,56 @@
           "type": "boolean",
           "default": false,
           "description": "Manual fixes (menu A/C, staged E/Shift+E, palette commands): when true, only run if the target line or block has an LSP error or warning. Default false — send anytime."
+        },
+        "autocorrect.prompt.includeDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include language-server diagnostics in correction prompts."
+        },
+        "autocorrect.prompt.includeNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include names defined in the file in fix prompts."
+        },
+        "autocorrect.prompt.examples": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include five short examples in the line-fix system prompt. Off by default: small local models (e.g. Granite 8B) tend to copy the examples into their reply."
+        },
+        "autocorrect.line.wholeStatement": {
+          "type": "boolean",
+          "default": true,
+          "description": "Correct the whole multi-line statement when the target continues an open bracket or backslash."
+        },
+        "autocorrect.logic.profileId": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Profile for logic review. Leave empty to use the active profile."
+        },
+        "autocorrect.staged.markerStyle": {
+          "type": "string",
+          "enum": [
+            "names",
+            "letters"
+          ],
+          "enumDescriptions": [
+            "Op names before the first staged line, e.g. \"fix → docs\".",
+            "The keys you pressed, e.g. \"✓ D\" (✓ = fix, D = docs, F = caveman)."
+          ],
+          "default": "names",
+          "description": "How staged ops are shown inline before the first staged line (context-tier digits follow either way)."
+        },
+        "autocorrect.logic.maxIssues": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "Maximum number of logic suggestions per review."
+        },
+        "autocorrect.fix.localChecks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check literal preservation, identifiers, and change size before applying fixes."
         },
         "autocorrect.prompt.prefix": {
           "type": "string",
@@ -482,13 +694,19 @@
         },
         "autocorrect.context.nearbyMode": {
           "type": "string",
-          "enum": ["indentScope", "window"],
+          "enum": [
+            "indentScope",
+            "window"
+          ],
           "default": "indentScope",
           "description": "How tier 1 (nearby) collects lines: indentScope (same/outer indent block) or window (flat N above / M below)."
         },
         "autocorrect.context.signatureDepth": {
           "type": "string",
-          "enum": ["header", "chain"],
+          "enum": [
+            "header",
+            "chain"
+          ],
           "default": "chain",
           "description": "Tier 2 signature: single enclosing header, or a short outer→inner chain (e.g. class + def)."
         },
@@ -503,114 +721,98 @@
           },
           "description": "Default context tier flags when entering staged mode (fix/docs). Caveman defaults to nearby only."
         },
+        "autocorrect.context.excludeGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.env",
+            "**/.env.*",
+            "**/*.pem",
+            "**/*.key",
+            "**/id_rsa*",
+            "**/id_ed25519*",
+            "**/*.p12",
+            "**/*.pfx",
+            "**/secrets.*",
+            "**/*secret*.json",
+            "**/credentials*",
+            "**/.aws/**",
+            "**/.ssh/**",
+            "**/.npmrc",
+            "**/.pypirc",
+            "**/*.kdbx"
+          ],
+          "scope": "machine",
+          "description": "Files matching these globs are never sent as targets or supplementary context."
+        },
+        "autocorrect.privacy.redactSecrets": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Redact recognized secrets from supplementary context before compression and budgeting."
+        },
+        "autocorrect.privacy.skipSecretTargetsForCloud": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Skip targets containing recognized secrets for cloud profiles, including the Guardian judge."
+        },
+        "autocorrect.hiddenProfiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "machine",
+          "description": "Built-in profile ids to hide. If all profiles are hidden, built-in defaults are restored."
+        },
         "autocorrect.activeProfile": {
           "type": "string",
           "default": "groq",
           "description": "Active LLM profile id from autocorrect.profiles."
         },
         "autocorrect.profiles": {
+          "scope": "machine",
           "type": "array",
-          "default": [
-            {
-              "id": "groq",
-              "label": "Groq",
-              "provider": "groq",
-              "model": "llama-3.1-8b-instant",
-              "contextPolicy": "minimal",
-              "timeoutMs": 5000,
-              "maxConcurrent": 2,
-              "reasoningMode": "off",
-              "reasoningEffort": "none",
-              "maxTokensLine": 300,
-              "color": "#4a9eff"
-            },
-            {
-              "id": "gemini",
-              "label": "Gemini",
-              "provider": "gemini",
-              "model": "gemini-2.5-flash-lite",
-              "contextPolicy": "minimal",
-              "timeoutMs": 5000,
-              "maxConcurrent": 2,
-              "reasoningMode": "off",
-              "reasoningEffort": "none",
-              "maxTokensLine": 300,
-              "color": "#2dd4bf"
-            },
-            {
-              "id": "anthropic",
-              "label": "Anthropic",
-              "provider": "anthropic",
-              "model": "claude-haiku-4-5-20251001",
-              "contextPolicy": "minimal",
-              "timeoutMs": 5000,
-              "maxConcurrent": 2,
-              "reasoningMode": "off",
-              "reasoningEffort": "none",
-              "maxTokensLine": 300,
-              "color": "#a78bfa"
-            },
-            {
-              "id": "local",
-              "label": "Granite 4.1 8B",
-              "provider": "openai-compatible",
-              "baseUrl": "http://127.0.0.1:8080/v1",
-              "model": "local",
-              "contextPolicy": "extended",
-              "timeoutMs": 60000,
-              "maxConcurrent": 1,
-              "reasoningMode": "off",
-              "reasoningEffort": "default",
-              "maxTokensLine": 2048,
-              "maxTokensBlock": 2048,
-              "color": "#fb923c"
-            },
-            {
-              "id": "guardian",
-              "label": "Granite Guardian 4.1",
-              "provider": "openai-compatible",
-              "baseUrl": "http://127.0.0.1:8081/v1",
-              "model": "local",
-              "contextPolicy": "minimal",
-              "timeoutMs": 15000,
-              "maxConcurrent": 1,
-              "reasoningMode": "off",
-              "reasoningEffort": "none",
-              "maxTokensLine": 256,
-              "color": "#94a3b8"
-            },
-            {
-              "id": "ollama",
-              "label": "Ollama",
-              "provider": "openai-compatible",
-              "baseUrl": "http://127.0.0.1:11434/v1",
-              "model": "llama3.2",
-              "contextPolicy": "extended",
-              "timeoutMs": 60000,
-              "maxConcurrent": 1,
-              "reasoningMode": "off",
-              "reasoningEffort": "none",
-              "maxTokensLine": 512,
-              "color": "#f472b6"
-            }
-          ],
-          "description": "Named LLM profiles. Prefer User settings (not Workspace). Package default is groq/gemini/anthropic/local/guardian/ollama; first activation seeds User settings when profiles are unset.",
+          "default": [],
+          "description": "User overrides by built-in profile id; omitted fields inherit current built-in defaults. Entries with new ids and a provider add custom profiles.",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
               "provider": {
                 "type": "string",
-                "enum": ["groq", "gemini", "anthropic", "openai-compatible"]
+                "enum": [
+                  "groq",
+                  "gemini",
+                  "anthropic",
+                  "openai-compatible"
+                ]
               },
-              "model": { "type": "string" },
-              "baseUrl": { "type": "string" },
+              "model": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "type": "string"
+              },
               "contextPolicy": {
                 "type": "string",
-                "enum": ["minimal", "standard", "extended"]
+                "enum": [
+                  "minimal",
+                  "standard",
+                  "extended"
+                ]
               },
-              "timeoutMs": { "type": "number" },
+              "timeoutMs": {
+                "type": "number"
+              },
               "maxConcurrent": {
                 "type": "number",
                 "minimum": 1,
@@ -618,12 +820,21 @@
               },
               "reasoningMode": {
                 "type": "string",
-                "enum": ["off", "log"],
+                "enum": [
+                  "off",
+                  "log"
+                ],
                 "description": "off = minimize reasoning tokens; log = capture reasoning in Output (never applied)."
               },
               "reasoningEffort": {
                 "type": "string",
-                "enum": ["none", "default", "low", "medium", "high"],
+                "enum": [
+                  "none",
+                  "default",
+                  "low",
+                  "medium",
+                  "high"
+                ],
                 "description": "Provider-specific reasoning effort (Groq reasoning models, Anthropic adaptive thinking)."
               },
               "maxTokensLine": {
@@ -634,7 +845,9 @@
                 "type": "number",
                 "description": "Floor for max_tokens on staged block fixes when reasoning is enabled."
               },
-              "color": { "type": "string" }
+              "color": {
+                "type": "string"
+              }
             }
           }
         },
@@ -660,7 +873,10 @@
         },
         "autocorrect.queue.mode": {
           "type": "string",
-          "enum": ["reviewChanges", "deferExecution"],
+          "enum": [
+            "reviewChanges",
+            "deferExecution"
+          ],
           "default": "reviewChanges",
           "enumItemLabels": [
             "Checkpoint review",
@@ -683,6 +899,7 @@
           "description": "After each fix/paste reply, score with Granite Guardian (profile autocorrect.guardian.profileId). On 'no', regenerate once then skip or soft-apply per autocorrect.apply.onReject."
         },
         "autocorrect.guardian.profileId": {
+          "scope": "machine",
           "type": "string",
           "default": "guardian",
           "description": "Profile id for the Guardian judge (default: guardian on http://127.0.0.1:8081/v1)."
@@ -693,9 +910,22 @@
           "minimum": 0,
           "description": "Extra fixer regenerations after a Guardian 'no' (default 1)."
         },
+        "autocorrect.apply.verifyAfterApply": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-check language-server errors after immediate fixes and undo fixes that introduce a new error without reducing the error count."
+        },
+        "autocorrect.apply.verifyWaitMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Maximum time in milliseconds to wait for updated language-server diagnostics after a fix."
+        },
         "autocorrect.apply.onReject": {
           "type": "string",
-          "enum": ["skip", "softApply"],
+          "enum": [
+            "skip",
+            "softApply"
+          ],
           "default": "softApply",
           "description": "When Guardian still rejects after retries: softApply (apply with soft label so you can revert; default) or skip (log only)."
         }
@@ -713,6 +943,12 @@
     "@types/vscode": "^1.85.0",
     "typescript": "^5.4.0"
   },
-  "repository": { "type": "git", "url": "https://github.com/amittenak47/llm-autocorrect" },
-  "license": "PolyForm-Noncommercial-1.0.0"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amittenak47/llm-autocorrect"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dependencies": {
+    "@vscode/tree-sitter-wasm": "0.3.1"
+  }
 }

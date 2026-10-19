@@ -31,3 +31,7 @@ export function shiftLine(
   }
   return { line, touched: true };
 }
+
+export function selectionLineSpan(startLine: number, endLine: number, endCharacter: number): { startLine: number; endLine: number } {
+  return { startLine, endLine: endLine > startLine && endCharacter === 0 ? endLine - 1 : endLine };
+}

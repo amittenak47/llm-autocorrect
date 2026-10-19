@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { skipExcludedDocument, skipSecretTarget } from "./privacy";
 import { cfg } from "./config";
 import { globalPromptPrefix } from "./promptContext";
 import { PROFILES, detectLanguage, LanguageProfile } from "./languages";
@@ -78,6 +79,7 @@ export class PasteTranslator implements vscode.Disposable {
     source: LanguageProfile,
     target: LanguageProfile
   ): Promise<void> {
+    if (skipExcludedDocument(doc) || skipSecretTarget(pastedText, this.router.activeProfile)) return;
     const choice = await vscode.window.showInformationMessage(
       `Pasted code looks like ${source.name} — convert it to ${target.name}?`,
       `Convert to ${target.name}`,
@@ -98,11 +100,16 @@ export class PasteTranslator implements vscode.Disposable {
 
   /** Manual fallback: "Autocorrect: Translate Selection to Current File's Language". */
   async translateSelection(): Promise<void> {
+    if (!cfg().enabled) {
+      vscode.window.setStatusBarMessage("Autocorrect is off — click the status bar item to turn it on", 4000);
+      return;
+    }
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.selection.isEmpty) {
       void vscode.window.showInformationMessage("Autocorrect: select the code to translate first.");
       return;
     }
+    if (skipExcludedDocument(editor.document)) return;
     const target = PROFILES[editor.document.languageId];
     if (!target) {
       void vscode.window.showInformationMessage(
@@ -125,6 +132,8 @@ export class PasteTranslator implements vscode.Disposable {
     sourceName: string,
     target: LanguageProfile
   ): Promise<void> {
+    const llmProfile = this.router.activeProfile;
+    if (skipExcludedDocument(doc) || skipSecretTarget(sourceText, llmProfile)) return;
     const prefix = globalPromptPrefix();
     const user =
       (prefix ? `Project note (style only — do not invent code from it):\n${prefix}\n\n` : "") +
@@ -150,6 +159,7 @@ export class PasteTranslator implements vscode.Disposable {
           user,
           maxTokens: 2048,
           signal: new AbortController().signal,
+          profileId: llmProfile.id,
           kind: "paste",
           judgeOriginal: sourceText,
         })

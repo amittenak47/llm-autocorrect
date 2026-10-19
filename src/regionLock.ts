@@ -5,6 +5,27 @@ export interface LineRegion {
   endLine: number;
 }
 
+export interface LineChange {
+  startLine: number;
+  endLine: number;
+  addedLines: number;
+}
+
+/** Move a region for one buffer change. touched = the change overlapped the region. */
+export function applyLineChange(region: LineRegion, change: LineChange): { region: LineRegion; touched: boolean } {
+  const delta = change.addedLines - (change.endLine - change.startLine);
+  if (change.startLine > region.endLine) {
+    return { region: { ...region }, touched: false };
+  }
+  if (change.endLine < region.startLine) {
+    return { region: shiftRegion(region, delta), touched: false };
+  }
+  return {
+    region: { startLine: region.startLine, endLine: Math.max(region.startLine, region.endLine + delta) },
+    touched: true,
+  };
+}
+
 export function normalizeRegion(line: number, endLine?: number): LineRegion {
   const end = endLine ?? line;
   return {

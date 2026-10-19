@@ -4,10 +4,11 @@ export function isLocalBaseUrl(baseUrl: string): boolean {
     return false;
   }
   try {
-    const host = new URL(baseUrl).hostname.toLowerCase();
+    const host = new URL(baseUrl).hostname.toLowerCase().replace(/^\[|\]$/g, "");
     return (
       host === "localhost" ||
-      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
       host === "::1" ||
       host.endsWith(".local")
     );

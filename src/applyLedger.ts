@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { blockLineRange } from "./blockApply";
-import { LineRegion, lineDeltaAfterReplace, baselineHash, shiftRegion } from "./regionLock";
+import { LineRegion, lineDeltaAfterReplace, baselineHash, shiftRegion, regionsOverlap } from "./regionLock";
 import { StagedOp } from "./stagedSession";
+import { toDocumentEol } from "./documentEol";
 
 let nextId = 1;
 
@@ -36,13 +37,17 @@ export class ChangeLedger {
   }
 
   findAtLine(uri: string, line: number): AppliedChange | undefined {
-    return this.applied.find(
+    return [...this.applied].reverse().find(
       (a) => a.uri === uri && line >= a.region.startLine && line <= a.region.endLine
     );
   }
 
   record(entry: AppliedChange): void {
     this.applied.push(entry);
+    const entries = this.list(entry.uri);
+    if (entries.length > 200) {
+      this.remove(entries[0].id);
+    }
   }
 
   remove(id: string): AppliedChange | undefined {
@@ -143,12 +148,21 @@ export async function applyRegionReplace(
   if (!located) {
     return { ok: false, stale: true };
   }
+  // The new change supersedes overlapping prior fixes; drop them only once the edit lands.
+  const superseded = ledger
+    .list(doc.uri.toString())
+    .filter((entry) => regionsOverlap(entry.region, located))
+    .map((entry) => entry.id);
   const range = blockLineRange(doc, located.startLine, located.endLine);
+  newText = toDocumentEol(newText, doc.eol === vscode.EndOfLine.CRLF);
   const edit = new vscode.WorkspaceEdit();
   edit.replace(doc.uri, range, newText);
   const ok = await vscode.workspace.applyEdit(edit);
   if (!ok) {
     return { ok: false };
+  }
+  for (const id of superseded) {
+    ledger.remove(id);
   }
 
   const inLines = located.endLine - located.startLine + 1;

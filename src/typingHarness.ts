@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
+import { cfg } from "./config";
+import { scoreHarness } from "./harnessScore";
 
 export interface TypingStep {
   insert: string;
@@ -26,7 +28,8 @@ function sleep(ms: number): Promise<void> {
 export async function runTypingPlan(
   plan: TypingPlan,
   output: vscode.OutputChannel,
-  token: vscode.CancellationToken
+  token: vscode.CancellationToken,
+  planPath?: string
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
@@ -36,6 +39,15 @@ export async function runTypingPlan(
   const charDelay = Math.max(0, plan.charDelayMs ?? 0);
   const afterEnter = Math.max(0, plan.afterEnterMs ?? 3500);
   const steps = plan.steps ?? [];
+  const startLine = editor.selection.active.line;
+  const c = cfg();
+  const settings = {
+    "autocorrect.prompt.includeDiagnostics": c.promptIncludeDiagnostics,
+    "autocorrect.prompt.includeNames": c.promptIncludeNames,
+    "autocorrect.prompt.examples": c.promptExamples,
+    "autocorrect.line.wholeStatement": c.lineWholeStatement,
+    "autocorrect.fix.localChecks": c.fixLocalChecks,
+  };
   output.appendLine(
     `[harness] starting ${steps.length} steps · charDelay=${charDelay}ms · afterEnter=${afterEnter}ms`
   );
@@ -76,6 +88,27 @@ export async function runTypingPlan(
     }
   }
 
+  await sleep(afterEnter * 2);
+  if (token.isCancellationRequested) {
+    output.appendLine("[harness] cancelled before scoring");
+    return;
+  }
+  const finalLines = editor.document.getText().split(/\r?\n/).slice(startLine);
+  const score = scoreHarness(steps.filter((step) => step.enter !== false)
+    .map((step) => ({ insert: step.insert, clean: step.clean ?? step.insert })), finalLines);
+  output.appendLine(`[harness] score: fixed=${score.fixed} missed=${score.missed} wrongFix=${score.wrongFix}` +
+    ` brokeCorrect=${score.brokeCorrect} keptCorrect=${score.keptCorrect}` +
+    ` precision=${(score.precision * 100).toFixed(1)}% recall=${(score.recall * 100).toFixed(1)}%`);
+  for (const outcome of score.outcomes) {
+    if (outcome.kind === "keptCorrect") continue;
+    output.appendLine(`[harness] step ${outcome.index + 1} ${outcome.kind}:` +
+      ` insert=${JSON.stringify(outcome.insert)} final=${JSON.stringify(outcome.final)} clean=${JSON.stringify(outcome.clean)}`);
+  }
+  if (planPath) {
+    const scorePath = planPath.replace(/\.json$/i, "") + ".score.json";
+    fs.writeFileSync(scorePath, JSON.stringify({ ...score, settings }, null, 2) + "\n", "utf8");
+    output.appendLine(`[harness] score written to ${scorePath}`);
+  }
   output.appendLine(`[harness] done (${steps.length} steps)`);
   void vscode.window.showInformationMessage(`Autocorrect harness finished (${steps.length} steps)`);
 }
@@ -102,7 +135,7 @@ export async function pickAndRunTypingHarness(output: vscode.OutputChannel): Pro
       cancellable: true,
     },
     async (_progress, token) => {
-      await runTypingPlan(plan, output, token);
+      await runTypingPlan(plan, output, token, uris[0].fsPath);
     }
   );
 }
