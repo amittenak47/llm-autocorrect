@@ -21,7 +21,7 @@ Terminal-style control over what you send to the LLM: stage a selection, set mod
 
 The extension is the same in VS Code and Cursor — only **language server (LSP)** setup differs.
 
-> **Privacy — what leaves your machine.** With a cloud profile (Groq, Gemini, Anthropic), the line or block being fixed and the code around it are sent to that provider. Use the `local` profile (llama-server / Ollama) to keep everything on your machine.
+> **Privacy: what is sent to the model provider.** With a cloud profile (Groq, Gemini, Anthropic), the line or block being fixed and the code around it are sent to that provider. With the `local` profile (llama-server / Ollama), nothing is sent to any outside service.
 > Since **v0.4.0**: secrets in surrounding code are redacted, lines that look like they contain a secret are not sent to cloud profiles, sensitive files (`.env`, keys, credentials) are never used, and a workspace's settings can no longer redirect your stored API key to another server.
 > **If you used v0.3.0 or earlier with a cloud profile:** code around your edits may have been sent to that provider unredacted, so a key hardcoded near an edit may have reached the provider you chose, and nowhere else. This mainly matters if you autocorrected config or `.env` files, or had `context.ringEnabled` on (which could include your last selection from any file). If so, kindly consider rotating any hardcoded keys. From v0.4.0, recognized secrets are redacted before anything is sent, so you don't need to worry about this going forward. See [Privacy](#privacy).
 
